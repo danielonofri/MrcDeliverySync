@@ -1,0 +1,311 @@
+@page "/"
+@implements IAsyncDisposable
+@using MrcDeliverySync.Models
+@using MrcDeliverySync.Repositories
+@using MrcDeliverySync.Services
+@using MrcDeliverySync.Components.Orders
+@inject IOrderRepository OrderRepository
+@inject IAudioService AudioService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@inject ILogger<Login> Logger
+
+<PageTitle>Dashboard - Mrc DeliveryHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @* --- ENCABEZADO CON CONTROLES VISIBLES --- *@
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            <div>
+                <MudText Typo="Typo.h5" Class="fw-bold">Tablero de Despacho</MudText>
+                @* Badges de Robots *@
+                @if (_robots != null && _robots.Any())
+                {
+                    @foreach (var robot in _robots)
+                    {
+                        bool online = robot.IsOnline(3);
+                        <MudTooltip Text="@($"Último informe: {robot.UltimoLatidoLocal:HH:mm:ss} | {robot.UltimoMensaje}")">
+                            <MudChip T="string" Color="@(online ? Color.Success : Color.Error)" Size="Size.Small"
+                                     Variant="Variant.Filled"
+                                     Icon="@(online ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)">
+                                @robot.IdRobot: @(online ? "ONLINE" : "CAÍDO")
+                            </MudChip>
+                        </MudTooltip>
+                    }
+                }
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Gestión unificada | Atajos: <b>[A]</b> Aceptar | <b>[R]</b> Preparar | <b>[E]</b> Entregado
+                </MudText>
+            </div>
+
+            <div class="d-flex align-center gap-3">
+                @* Switches de Audio *@
+                <MudCheckBox T="bool" Value="_enableNewOrderSound" ValueChanged="OnNewOrderSoundToggle"
+                             Color="Color.Success" Dense="true">
+                    <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Size="Size.Small" Class="mr-1" /> Audio
+                    Nuevos
+                </MudCheckBox>
+
+                <MudCheckBox T="bool" @bind-Value="_enableDelaySound" Color="Color.Warning" Dense="true">
+                    <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" Class="mr-1" /> Audio Demoras
+                </MudCheckBox>
+
+                @* Selector Fichas / Tabla *@
+                <MudToggleGroup T="ViewMode" Value="_currentViewMode" ValueChanged="OnViewModeChanged"
+                                Color="Color.Primary" Size="Size.Small">
+                    <MudToggleItem Value="ViewMode.Cards" Text="Fichas">
+                        <MudIcon Icon="@Icons.Material.Filled.GridView" />
+                    </MudToggleItem>
+                    <MudToggleItem Value="ViewMode.Table" Text="Tabla">
+                        <MudIcon Icon="@Icons.Material.Filled.ViewList" />
+                    </MudToggleItem>
+                </MudToggleGroup>
+
+                <MudTooltip Text="Recargar Pedidos">
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Default"
+                                   OnClick="LoadOrdersAsync" />
+                </MudTooltip>
+            </div>
+        </div>
+    </MudPaper>
+
+    @* --- PESTAÑAS POR OPERADOR --- *@
+    <MudTabs Elevation="1" Rounded="true" Class="pa-4" KeepPanelsAlive="true">
+        <MudTabPanel Text="Consolidado" Icon="@Icons.Material.Filled.Layers">
+            @RenderOrdersList(_orders)
+        </MudTabPanel>
+        <MudTabPanel Text="PedidosYa" Icon="@Icons.Material.Filled.DeliveryDining">
+            @RenderOrdersList(_orders.Where(o => o.Operator == DeliveryOperator.PedidosYa))
+        </MudTabPanel>
+        <MudTabPanel Text="Uber Eats" Icon="@Icons.Material.Filled.Fastfood">
+            @RenderOrdersList(_orders.Where(o => o.Operator == DeliveryOperator.UberEats))
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+@code {
+    private System.Threading.Timer? _syncTimer;
+    private int _criticalDelayThresholdMinutes = 15;
+    private int _intervalSeconds = 30;
+    private List<OrderSummaryDto> _orders = new();
+    private IEnumerable<RobotStatusDto> _robots = new List<RobotStatusDto>(); // Declaración
+    private ViewMode _currentViewMode = ViewMode.Cards;
+    private bool _isLoading = true;
+    private DotNetObjectReference<Home>? _dotNetRef;
+    private bool _enableNewOrderSound = true;
+    private bool _enableDelaySound = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Leer intervalo desde configuración o usar 30s por defecto
+        _intervalSeconds = Configuration.GetValue<int>("SyncSettings:CheckIntervalSeconds", 30);
+        _criticalDelayThresholdMinutes = Configuration.GetValue<int>(key: "SyncSettings:WarningThresholdMinutes", 20);
+
+        await LoadOrdersDataOnlyAsync();
+
+        // Iniciar el temporizador recurrente
+        _syncTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadOrdersAsync();
+                await EvaluateSyncHealthAsync();
+                StateHasChanged();
+            });
+        }, null, _intervalSeconds * 1000, _intervalSeconds * 1000);
+    }
+
+    private async Task EvaluateSyncHealthAsync()
+    {
+        try
+        {
+            _robots = await OrderRepository.GetRobotsStatusAsync();
+
+            // Si hay algún robot caído o demorado, emitir alerta
+            bool hasOfflineRobots = _robots.Any(r => !r.IsOnline(3));
+            if (hasOfflineRobots && _enableDelaySound)
+            {
+                await AudioService.PlayCriticalDelaySoundAsync();
+                Snackbar.Add("⚠️ Advertencia: Se detectó pérdida de sincronización en uno o más robots.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error en Sync Online: {ex.Message}");
+            Console.WriteLine($"Error en Sync Online: {ex.Message}");
+        }
+    }
+    private async Task LoadOrdersDataOnlyAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await OrderRepository.GetActiveOrdersConsolidatedAsync("");
+            _orders = result.ToList();
+
+            // Consulta de Robots en la misma carga
+            _robots = await OrderRepository.GetRobotsStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar los pedidos: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("registerKeyboardShortcuts", _dotNetRef);
+            await EvaluateAudioAlertsAsync();
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnShortcutKeyPressed(string key)
+    {
+        switch (key)
+        {
+            case "A":
+                var receivedOrder = _orders.FirstOrDefault(o => o.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase));
+                if (receivedOrder != null)
+                {
+                    await OrderRepository.UpdateOrderStatusAsync(receivedOrder.Id, "ACCEPTED", receivedOrder.Operator);
+                    Snackbar.Add($"Pedido #{receivedOrder.ShortCode} ACEPTADO con atajo [A]", Severity.Success);
+                    await LoadOrdersAsync();
+                }
+                break;
+
+            case "R":
+                var acceptedOrder = _orders.FirstOrDefault(o => o.Status.Equals("ACCEPTED", StringComparison.OrdinalIgnoreCase));
+                if (acceptedOrder != null)
+                {
+                    await OrderRepository.UpdateOrderStatusAsync(acceptedOrder.Id, "PREPARED", acceptedOrder.Operator);
+                    Snackbar.Add($"Pedido #{acceptedOrder.ShortCode} marcado PREPARADO con atajo [R]", Severity.Info);
+                    await LoadOrdersAsync();
+                }
+                break;
+
+            case "E":
+                var preparedOrder = _orders.FirstOrDefault(o => o.Status.Equals("PREPARED", StringComparison.OrdinalIgnoreCase));
+                if (preparedOrder != null)
+                {
+                    await OrderRepository.UpdateOrderStatusAsync(preparedOrder.Id, "DELIVERED", preparedOrder.Operator);
+                    Snackbar.Add($"Pedido #{preparedOrder.ShortCode} ENTREGADO con atajo [E]", Severity.Success);
+                    await LoadOrdersAsync();
+                }
+                break;
+        }
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        await LoadOrdersDataOnlyAsync();
+        await EvaluateAudioAlertsAsync();
+    }
+
+    private async Task EvaluateAudioAlertsAsync()
+    {
+        try
+        {
+            bool hasReceivedOrders = _orders.Any(o => o.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase));
+            bool hasDelayedOrders = _orders.Any(o => o.IsDelayed(_criticalDelayThresholdMinutes));
+
+            if (_enableNewOrderSound && hasReceivedOrders)
+            {
+                await AudioService.StartNewOrderLoopAsync(12);
+            }
+            else
+            {
+                await AudioService.StopNewOrderLoopAsync();
+            }
+
+            if (_enableDelaySound && hasDelayedOrders && !hasReceivedOrders)
+            {
+                await AudioService.PlayCriticalDelaySoundAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Capturar el bloqueo de autoplay de JS sin romper el flujo de la app
+            Logger.LogWarning($"Audio bloqueado por el navegador hasta interacción del usuario: {ex.Message}");
+            Console.WriteLine($"Audio bloqueado por el navegador hasta interacción del usuario: {ex.Message}");
+        }
+    }
+
+    private async Task OnNewOrderSoundToggle(bool enabled)
+    {
+        _enableNewOrderSound = enabled;
+        if (!enabled)
+        {
+            await AudioService.StopNewOrderLoopAsync();
+        }
+        else
+        {
+            await EvaluateAudioAlertsAsync();
+        }
+    }
+
+    private void OnViewModeChanged(ViewMode mode)
+    {
+        _currentViewMode = mode;
+        StateHasChanged();
+    }
+
+    private async Task HandleOrderSelection(OrderSummaryDto order)
+    {
+        var parameters = new DialogParameters<OrderDetailDialog>
+        {
+            { x => x.OrderSummary, order }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<OrderDetailDialog>("Detalle del Pedido", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadOrdersAsync();
+        }
+    }
+
+    private RenderFragment RenderOrdersList(IEnumerable<OrderSummaryDto> filteredOrders) => __builder =>
+    {
+        if (_isLoading)
+        {
+            <div class="d-flex justify-center pa-4">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (!filteredOrders.Any())
+        {
+            <MudAlert Severity="Severity.Normal" Class="my-2">No hay pedidos activos en este momento.</MudAlert>
+        }
+        else
+        {
+            if (_currentViewMode == ViewMode.Cards)
+            {
+                <OrderCardsView Orders="filteredOrders" OnSelectOrder="HandleOrderSelection" />
+            }
+            else
+            {
+                <OrderTableView Orders="filteredOrders" OnSelectOrder="HandleOrderSelection" />
+            }
+        }
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        _syncTimer?.Dispose();
+        _dotNetRef?.Dispose();
+        await ValueTask.CompletedTask;
+    }
+}

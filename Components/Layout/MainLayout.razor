@@ -1,0 +1,152 @@
+﻿@inherits LayoutComponentBase
+@using MrcDeliverySync.Services
+@inject IAuthVaultService VaultService
+@inject NavigationManager NavManager
+
+@* Proveedores globales requeridos por MudBlazor *@
+<MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_customTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    @* Se agrega Fixed="true" para fijar la barra superior y evitar solapamientos con el contenido *@
+    <MudAppBar Elevation="2" Color="Color.Primary" Fixed="true">
+        <MudText Typo="Typo.h6" Class="ml-2">Mrc Delivery Sync.</MudText>
+
+        <MudSpacer />
+
+        @* --- BADGES DE INFORMACIÓN (Versión, Usuario y Rol) --- *@
+        <div class="d-flex align-center gap-2 mr-3">
+            @* Versión de la app *@
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Surface"
+                     Style="font-weight: 600;">
+                v@_appVersion
+            </MudChip>
+
+            @* Nombre de Usuario (extraído del JWT) *@
+            @if (!string.IsNullOrEmpty(_userName))
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Surface"
+                         Icon="@Icons.Material.Filled.Person">
+                    @_userName
+                </MudChip>
+            }
+
+            @* Rol del Usuario *@
+            @if (_userRole > 0)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@GetRoleColor(_userRole)"
+                         Icon="@Icons.Material.Filled.VerifiedUser">
+                    @GetRoleLabel(_userRole)
+                </MudChip>
+            }
+        </div>
+
+        @* Switch de Tema Claro/Oscuro (Sol / Luna) *@
+        <MudTooltip Text="@(_isDarkMode ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.WbSunny : Icons.Material.Filled.NightsStay)"
+                           Color="Color.Inherit" OnClick="ToggleDarkMode" />
+        </MudTooltip>
+
+        <MudTooltip Text="Cerrar Sesión">
+            <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" OnClick="Logout" />
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudMainContent Class="pt-16 px-4">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _isDarkMode = true; // Por defecto inicia en modo oscuro para monitores de despacho
+    private MudThemeProvider _mudThemeProvider = null!;
+
+    private string _appVersion = "1.0.0";
+    private string _userName = string.Empty;
+    private int _userRole = 0;
+
+    // Definición de colores del tema
+    private readonly MudTheme _customTheme = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#D32F2F", // Rojo característico de delivery / branding
+            Secondary = "#2196F3",
+            AppbarBackground = "#D32F2F",
+            Background = "#F5F5F5"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#E53935",
+            Secondary = "#64B5F6",
+            AppbarBackground = "#1E1E1E",
+            Background = "#121212",
+            Surface = "#1E1E1E"
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // 1. Obtener la versión de la app
+            _appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+
+            // 2. Obtener el Rol desde el Vault
+            _userRole = await VaultService.GetUserRoleAsync();
+
+            // 3. Obtener el Token y extraer el nombre de usuario
+            try
+            {
+                var token = await VaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    _userName = JwtHelper.GetUsernameFromToken(token);
+                }
+            }
+            catch
+            {
+                // Evita bloqueos en el renderizado si falla la lectura
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private string GetRoleLabel(int role) => role switch
+    {
+        1 => "Admin",
+        2 => "Supervisor",
+        3 => "Operador",
+        _ => "Usuario"
+    };
+
+    private Color GetRoleColor(int role) => role switch
+    {
+        1 => Color.Dark,
+        2 => Color.Warning,
+        _ => Color.Info
+    };
+
+    private async Task Logout()
+    {
+        _userName = string.Empty;
+        _userRole = 0;
+        // Regla de Negocio: Si es Admin (Rol 1), elimina la OwnerApiKey al cerrar sesión
+        if (_userRole == 1)
+        {
+            await VaultService.SaveOwnerApiKeyAsync(string.Empty);
+        }
+
+        await VaultService.ClearSessionAsync();
+        StateHasChanged();
+        NavManager.NavigateTo("login", forceLoad: true);
+    }
+
+    private void ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+}

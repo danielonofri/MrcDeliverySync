@@ -1,0 +1,27 @@
+﻿@inject IWebHostEnvironment Env
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MrcDeliverySync</title>
+
+    <base href="@(Env.IsDevelopment() ? "/" : "/MrcDeliverySync/")" />
+
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/site.css" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+
+    <script src="_framework/blazor.web.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="js/keyboard-shortcuts.js"></script>
+    <script src="js/audio-alerts.js"></script>
+</body>
+
+</html>

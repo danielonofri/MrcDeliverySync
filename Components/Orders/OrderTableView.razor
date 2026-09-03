@@ -1,0 +1,52 @@
+@using MrcDeliverySync.Models
+
+<MudTable Items="Orders" Hover="true" Striped="true" OnRowClick="@(args => OnSelectOrder.InvokeAsync(args.Item))"
+          T="OrderSummaryDto">
+    <HeaderContent>
+        <MudTh>Pedido</MudTh>
+        <MudTh>Cliente</MudTh>
+        <MudTh>Operador</MudTh>
+        <MudTh>Estado</MudTh>
+        <MudTh>Total</MudTh>
+        <MudTh>Transcurrido</MudTh>
+        <MudTh>Teléfono</MudTh>
+        <MudTh>Acciones</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Pedido">#@context.ShortCode</MudTd>
+        <MudTd DataLabel="Cliente">@context.CustomerName</MudTd>
+        <MudTd DataLabel="Operador">@context.Operator.ToString()</MudTd>
+        <MudTd DataLabel="Estado">
+            <MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">
+                @context.Status
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Total">$@context.TotalAmount.ToString("N2")</MudTd>
+        <MudTd DataLabel="Transcurrido">
+            <MudChip T="string" Color="@(context.IsDelayed(15) ? Color.Error : Color.Default)" Size="Size.Small"
+                     Icon="@Icons.Material.Filled.AccessTime">
+                @context.MinutesElapsed min
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Teléfono">@context.CustomerPhone</MudTd>
+        <MudTd DataLabel="Acciones">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                       OnClick="@(() => OnSelectOrder.InvokeAsync(context))">
+                Ver
+            </MudButton>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    [Parameter] public IEnumerable<OrderSummaryDto> Orders { get; set; } = new List<OrderSummaryDto>();
+    [Parameter] public EventCallback<OrderSummaryDto> OnSelectOrder { get; set; }
+
+    private Color GetStatusColor(string status) => status?.ToUpper() switch
+    {
+        "RECEIVED" => Color.Warning,
+        "ACCEPTED" => Color.Info,
+        "PREPARED" => Color.Success,
+        _ => Color.Default
+    };
+}

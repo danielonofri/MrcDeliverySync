@@ -1,0 +1,73 @@
+@using MrcDeliverySync.Models
+
+<MudGrid>
+    @foreach (var order in Orders)
+    {
+        <MudItem xs="12" sm="6" md="4" lg="3">
+            <MudCard Elevation="3" Class="@GetCardClass(order)">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                            #@order.ShortCode @order.CustomerName
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @order.Operator.ToString() | Pedido: #@order.ShortCode
+                        </MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudChip T="string" Color="@GetStatusColor(order.Status)" Size="Size.Small">
+                            @order.Status
+                        </MudChip>
+                    </CardHeaderActions>
+                </MudCardHeader>
+
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center my-1">
+                        <MudText Typo="Typo.body2">Monto Total:</MudText>
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold">$@order.TotalAmount.ToString("N2")</MudText>
+                    </div>
+
+                    <div class="d-flex justify-space-between align-center my-1">
+                        <MudText Typo="Typo.body2">Transcurrido:</MudText>
+                        <MudChip T="string" Color="@(order.IsDelayed(15) ? Color.Error : Color.Default)" Size="Size.Small"
+                                 Icon="@Icons.Material.Filled.AccessTime">
+                            @order.MinutesElapsed min
+                        </MudChip>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(order.CustomerPhone))
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block mt-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Phone" Size="Size.Small" /> @order.CustomerPhone
+                        </MudText>
+                    }
+                </MudCardContent>
+
+                <MudCardActions Class="d-flex justify-end gap-1 pa-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               OnClick="@(() => OnSelectOrder.InvokeAsync(order))">
+                        Ver Detalle
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter] public IEnumerable<OrderSummaryDto> Orders { get; set; } = new List<OrderSummaryDto>();
+    [Parameter] public EventCallback<OrderSummaryDto> OnSelectOrder { get; set; }
+
+    private string GetCardClass(OrderSummaryDto order)
+    {
+        return order.IsDelayed(15) ? "border-solid border-2 mud-border-error" : "";
+    }
+
+    private Color GetStatusColor(string status) => status?.ToUpper() switch
+    {
+        "RECEIVED" => Color.Warning,
+        "ACCEPTED" => Color.Info,
+        "PREPARED" => Color.Success,
+        _ => Color.Default
+    };
+}

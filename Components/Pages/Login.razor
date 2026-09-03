@@ -1,0 +1,168 @@
+@page "/login"
+@using MrcDeliverySync.Models
+@using MrcDeliverySync.Services
+@inject IAuthVaultService VaultService
+@inject AuthApiClient AuthClient
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<div class="d-flex justify-center align-center min-vh-100 pa-4" style="min-height: 85vh;">
+    <MudCard Elevation="4" Style="width: 100%; max-width: 450px;">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5" Align="Align.Center" Class="fw-bold">Mrc Delivery Sync.</MudText>
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="d-block">Acceso Diario de Operador</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+
+        <MudCardContent>
+            @if (_isLoading)
+            {
+                @* Mientras lee el Vault no muestra nada para evitar el parpadeo *@
+                <div class="d-flex justify-center pa-6">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                </div>
+            }
+            else if (string.IsNullOrEmpty(_storedApiKey) || _isResetMode)
+            {
+                @* --- CASO 1: Dispositivo No Vinculado o Reset Manual --- *@
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    @(string.IsNullOrEmpty(_storedApiKey) ? "Dispositivo no configurado. Ingrese la OwnerApiKey." :
+                     "Reconfiguración de Vault de Dispositivo.")
+                </MudAlert>
+
+                <MudTextField @bind-Value="_apiKeyInput" Label="OwnerApiKey del Local" Variant="Variant.Outlined"
+                              InputType="InputType.Password" Class="mb-3" />
+
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                           OnClick="ValidateAndSaveApiKey">
+                    Validar y Guardar en Vault
+                </MudButton>
+
+                @if (_isResetMode && !string.IsNullOrEmpty(_storedApiKey))
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Default" FullWidth="true" Class="mt-2" OnClick="CancelReset">
+                        Cancelar Reset
+                    </MudButton>
+                }
+            }
+            else
+            {
+                @* --- CASO 2: Formulario Estándar de Login Diario --- *@
+                <MudTextField @bind-Value="_licencia" Label="Licencia" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Class="mb-2" />
+                <MudTextField @bind-Value="_ptoVta" Label="Punto de Venta" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Class="mb-2" />
+                <MudTextField @bind-Value="_username" Label="Usuario" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Class="mb-2" />
+                <MudTextField @bind-Value="_password" Label="Contraseña" Variant="Variant.Outlined"
+                              InputType="InputType.Password" Margin="Margin.Dense" Class="mb-2" />
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3"
+                           OnClick="ExecuteLogin">
+                    Iniciar Sesión
+                </MudButton>
+
+                @if (_userRole == 1 || _userRole == 2)
+                {
+                    <MudDivider Class="my-4" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" FullWidth="true" Size="Size.Small"
+                               OnClick="EnableResetMode">
+                        Resetear OwnerApiKey (Admin/Sup)
+                    </MudButton>
+                }
+            }
+        </MudCardContent>
+    </MudCard>
+</div>
+
+@code {
+    private string? _storedApiKey;
+    private string _apiKeyInput = string.Empty;
+    private string _licencia = string.Empty;
+    private string _ptoVta = string.Empty;
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+
+    private int _userRole = 0;
+    private bool _isResetMode = false;
+    private bool _isLoading = true;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _storedApiKey = await VaultService.GetOwnerApiKeyAsync();
+            _userRole = await VaultService.GetUserRoleAsync();
+            _isLoading = false; // <-- 2. Finaliza la carga
+            StateHasChanged();
+        }
+    }
+
+    private void EnableResetMode()
+    {
+        _apiKeyInput = string.Empty;
+        _isResetMode = true;
+    }
+
+    private void CancelReset()
+    {
+        _isResetMode = false;
+    }
+
+    private async Task ValidateAndSaveApiKey()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKeyInput))
+        {
+            Snackbar.Add("Ingrese una OwnerApiKey válida.", Severity.Warning);
+            return;
+        }
+
+        // Endpoint: /api/v1/owner/auth/validate-key
+        var result = await AuthClient.ValidateKeyAsync(_apiKeyInput);
+        if (result != null)
+        {
+            await VaultService.SaveOwnerApiKeyAsync(_apiKeyInput);
+            _storedApiKey = _apiKeyInput;
+            _licencia = result.Licencia;
+            _ptoVta = result.PtoVta;
+            _isResetMode = false;
+            Snackbar.Add("OwnerApiKey validada y almacenada en el Vault.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("OwnerApiKey inválida o rechazada por el servidor.", Severity.Error);
+        }
+    }
+
+    private async Task ExecuteLogin()
+    {
+        if (string.IsNullOrEmpty(_storedApiKey))
+        {
+            Snackbar.Add("El dispositivo no tiene una OwnerApiKey vinculada.", Severity.Error);
+            return;
+        }
+
+        // Endpoint: /api/v1/owner/auth/login
+        var result = await AuthClient.LoginAsync(_licencia, _username, _password, _ptoVta, _storedApiKey);
+        if (result != null)
+        {
+            await VaultService.SaveAuthTokenAsync(result.Token, result.Rol, _licencia);
+
+            // --- REGLA ADMIN (ROL 1) ---
+            // Si el usuario es Admin (Rol 1), eliminamos la OwnerApiKey del Vault
+            // para que la próxima vez que se requiera acceso pida reconfiguración.
+            if (result.Rol == 1)
+            {
+                // Sobrescribe la clave con nulo/vacío para que el login vuelva a pedirla
+                await VaultService.SaveOwnerApiKeyAsync(string.Empty);
+            }
+
+            Snackbar.Add("Autenticación exitosa.", Severity.Success);
+            NavManager.NavigateTo("", forceLoad: true);
+        }
+        else
+        {
+            Snackbar.Add("Credenciales inválidas.", Severity.Error);
+        }
+    }
+}
