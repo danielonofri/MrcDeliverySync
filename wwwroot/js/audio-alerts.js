@@ -71,7 +71,7 @@ window.playCriticalDelayAlert = function () {
     playSoftChime([440.00, 349.23], [0.5, 0.7], 0.07);
 };
 
-// Reanudar el contexto correcto al interactuar con cualquier parte de la pantalla
+// Reanudar el contexto al interactuar con cualquier parte de la pantalla
 window.resumeAudioContext = function () {
     const ctx = getAudioContext();
     if (ctx && ctx.state === 'suspended') {
@@ -83,9 +83,11 @@ window.resumeAudioContext = function () {
     }
 };
 
-// Escuchar clics globales para desbloquear AudioContext
-document.addEventListener('click', function () {
-    window.resumeAudioContext();
+// Escuchar eventos en fase de Captura (para ignorar e.stopPropagation de Blazor/MudBlazor)
+['pointerdown', 'click', 'keydown', 'touchstart'].forEach(eventType => {
+    document.addEventListener(eventType, function () {
+        window.resumeAudioContext();
+    }, { capture: true, passive: true });
 });
 
 window.addEventListener('pagehide', () => {

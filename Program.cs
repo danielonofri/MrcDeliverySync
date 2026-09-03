@@ -6,12 +6,12 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    .CreateLogger();
 
-builder.Host.UseSerilog();
+// 1. SERILOG (Va inmediatamente después de instanciar el builder)
+// builder.Host.UseSerilog((context, services, configuration) => configuration
+//     .ReadFrom.Configuration(context.Configuration)
+//     .ReadFrom.Services(services)
+//     .Enrich.FromLogContext());
 // --- SERVICIOS BLAZOR NET 10 ---
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -52,12 +52,13 @@ if (!app.Environment.IsDevelopment())
 // --- MIDDLEWARES Y ARCHIVOS ESTÁTICOS ---
 app.UseHttpsRedirection();
 
-// 1. Archivos físicos planos de wwwroot (css, js, etc.)
-app.UseStaticFiles();
-
-// 2. Mapeo de activos compilados de .NET 10
+// En .NET 10 MapStaticAssets debe ir para activos optimizados
 app.MapStaticAssets();
 
+// UseStaticFiles permite a IIS servir los archivos de wwwroot directamente
+app.UseStaticFiles();
+
+app.UseRouting();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
