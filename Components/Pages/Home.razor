@@ -79,7 +79,7 @@
         <MudTabPanel Text="PedidosYa" Icon="@Icons.Material.Filled.DeliveryDining">
             @RenderOrdersList(_orders.Where(o => o.Operator == DeliveryOperator.PedidosYa))
         </MudTabPanel>
-        <MudTabPanel Text="Uber Eats" Icon="@Icons.Material.Filled.Fastfood">
+        <MudTabPanel Text="Operador 2" Icon="@Icons.Material.Filled.Fastfood">
             @RenderOrdersList(_orders.Where(o => o.Operator == DeliveryOperator.UberEats))
         </MudTabPanel>
     </MudTabs>
