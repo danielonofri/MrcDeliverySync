@@ -52,8 +52,8 @@ if (!app.Environment.IsDevelopment())
 // --- MIDDLEWARES Y ARCHIVOS ESTÁTICOS ---
 app.UseHttpsRedirection();
 
-// En .NET 10 MapStaticAssets debe ir para activos optimizados
-app.MapStaticAssets();
+// Elimina o comenta esta línea:
+// app.MapStaticAssets();
 
 // UseStaticFiles permite a IIS servir los archivos de wwwroot directamente
 app.UseStaticFiles();

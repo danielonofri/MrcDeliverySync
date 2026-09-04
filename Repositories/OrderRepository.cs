@@ -178,32 +178,110 @@ namespace MrcDeliverySync.Repositories
         {
             try
             {
-                var url = $"api/v1/pos-order-bridge/order/accept/{orderCode}";
-                if (preparationMinutes.HasValue && preparationMinutes.Value > 0)
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    $"api/v1/pos-order-bridge/order/accept/{orderCode}");
+
+                // Leemos el token de la sesión activa
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
                 {
-                    url += $"?preparationMinutes={preparationMinutes.Value}";
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    Console.WriteLine("🔑 [AUTH] Token Bearer adjuntado a la petición.");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ [AUTH WARN] GetAuthTokenAsync() devolvió nulo o vacío.");
                 }
 
-                var response = await _http.PostAsync(url, null);
-                return response.IsSuccessStatusCode;
+                var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug($"❌ [ACCEPTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    Console.WriteLine($"❌ [ACCEPTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return false;
+                }
+
+                _logger.LogDebug($"✅ [ACCEPTED OK] Orden #{orderCode} marcada como ACCEPTED.");
+                // Console.WriteLine($"✅ [ACCEPTED OK] Orden #{code} marcada como ACCEPTED.");
+                return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, $"❌ [ACCEPTED EXCEPTION]: {ex.Message}");
+                // Console.WriteLine($"❌ [PREPARED EXCEPTION]: {ex.Message}"); 
                 return false;
             }
+
+            //try
+            //{
+            //    var url = $"api/v1/pos-order-bridge/order/accept/{orderCode}";
+            //    if (preparationMinutes.HasValue && preparationMinutes.Value > 0)
+            //    {
+            //        url += $"?preparationMinutes={preparationMinutes.Value}";
+            //    }
+
+            //    var response = await _http.PostAsync(url, null);
+            //    return response.IsSuccessStatusCode;
+            //}
+            //catch
+            //{
+            //    return false;
+            //}
         }
 
         public async Task<bool> RejectOrderAsync(string orderCode)
         {
             try
             {
-                var response = await _http.PostAsync($"api/v1/pos-order-bridge/order/reject/{orderCode}", null);
-                return response.IsSuccessStatusCode;
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    $"api/v1/pos-order-bridge/order/reject/{orderCode}");
+
+                // Leemos el token de la sesión activa
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    Console.WriteLine("🔑 [AUTH] Token Bearer adjuntado a la petición.");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ [AUTH WARN] GetAuthTokenAsync() devolvió nulo o vacío.");
+                }
+
+                var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    Console.WriteLine($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return false;
+                }
+
+                _logger.LogDebug($"✅ [REJECTED OK] Orden #{orderCode} marcada como REJECTED.");
+                // Console.WriteLine($"✅ [PREPARED OK] Orden #{code} marcada como REJECTED.");
+                return true;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, $"❌ [REJECTED EXCEPTION]: {ex.Message}");
+                // Console.WriteLine($"❌ [PREPARED EXCEPTION]: {ex.Message}"); 
                 return false;
             }
+
+            //try
+            //{
+            //    var response = await _http.PostAsync($"api/v1/pos-order-bridge/order/reject/{orderCode}", null);
+            //    return response.IsSuccessStatusCode;
+            //}
+            //catch
+            //{
+            //    return false;
+            //}
         }
 
         public async Task<bool> MarkAsPreparedAsyncX(string orderCode)
