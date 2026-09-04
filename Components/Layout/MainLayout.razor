@@ -16,7 +16,7 @@
 
         <MudSpacer />
 
-        @* --- BADGES DE INFORMACIÓN (Versión, Usuario y Rol) --- *@
+        @* --- BADGE DE USUARIO / ESTADO DE SESIÓN --- *@
         <div class="d-flex align-center gap-2 mr-3">
             @* Versión de la app *@
             <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Surface"
@@ -24,21 +24,14 @@
                 v@_appVersion
             </MudChip>
 
-            @* Nombre de Usuario (extraído del JWT) *@
-            @if (!string.IsNullOrEmpty(_userName))
+            @* Cadena combinada: PepeHonguito - Admin O "Inicie sesión" *@
+            @if (!string.IsNullOrEmpty(_userDisplayInfo))
             {
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Surface"
-                         Icon="@Icons.Material.Filled.Person">
-                    @_userName
-                </MudChip>
-            }
-
-            @* Rol del Usuario *@
-            @if (_userRole > 0)
-            {
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@GetRoleColor(_userRole)"
-                         Icon="@Icons.Material.Filled.VerifiedUser">
-                    @GetRoleLabel(_userRole)
+                <MudChip T="string" Size="Size.Small"
+                         Variant="@(_userRole > 0 || !string.IsNullOrEmpty(_userName) ? Variant.Filled : Variant.Outlined)"
+                         Color="@(_userRole > 0 ? GetRoleColor(_userRole) : Color.Surface)"
+                         Icon="@(_userRole > 0 || !string.IsNullOrEmpty(_userName) ? Icons.Material.Filled.Person : Icons.Material.Filled.Lock)">
+                    @_userDisplayInfo
                 </MudChip>
             }
         </div>
@@ -67,6 +60,7 @@
     private string _userName = string.Empty;
     private int _userRole = 0;
 
+    private string _userDisplayInfo = string.Empty;
     // Definición de colores del tema
     private readonly MudTheme _customTheme = new()
     {
@@ -87,6 +81,36 @@
         }
     };
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserDataAsync();
+    }
+
+    private async Task LoadUserDataAsync()
+    {
+        // 1. Obtener la versión de la app
+        _appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+
+        try
+        {
+            // 2. Obtener el Rol desde el Vault
+            _userRole = await VaultService.GetUserRoleAsync();
+
+            // 3. Obtener el Token y extraer el nombre de usuario
+            var token = await VaultService.GetAuthTokenAsync();
+            if (!string.IsNullOrEmpty(token))
+            {
+                _userName = JwtHelper.GetUsernameFromToken(token);
+            }
+        }
+        catch
+        {
+            // Evita bloqueos en el renderizado si falla la lectura del Vault/Token
+        }
+
+        // 4. Construir siempre la etiqueta con la información resultante
+        BuildUserDisplayInfo();
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -97,21 +121,77 @@
             // 2. Obtener el Rol desde el Vault
             _userRole = await VaultService.GetUserRoleAsync();
 
-            // 3. Obtener el Token y extraer el nombre de usuario
-            try
+            var token = await VaultService.GetAuthTokenAsync();
+
+            Console.WriteLine("================= DEPURACIÓN DE TOKEN =================");
+            Console.WriteLine($"1. Rol obtenido del Vault: {_userRole}");
+            Console.WriteLine($"2. Token obtenido: '{token}'");
+
+            if (!string.IsNullOrEmpty(token))
             {
-                var token = await VaultService.GetAuthTokenAsync();
-                if (!string.IsNullOrEmpty(token))
+                try
                 {
+                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                    var jwtToken = handler.ReadJwtToken(token);
+
+                    Console.WriteLine("3. CLAIMS ENCONTRADOS DENTRO DEL TOKEN:");
+                    foreach (var claim in jwtToken.Claims)
+                    {
+                        Console.WriteLine($"   - Tipo: {claim.Type} | Valor: {claim.Value}");
+                    }
+
                     _userName = JwtHelper.GetUsernameFromToken(token);
+                    Console.WriteLine($"4. Resultado de JwtHelper.GetUsernameFromToken: '{_userName}'");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"ERROR al leer el token JWT: {ex.Message}");
                 }
             }
-            catch
+            else
             {
-                // Evita bloqueos en el renderizado si falla la lectura
+                Console.WriteLine("3. El token devuelto por VaultService está VACÍO o NULO.");
+            }
+            Console.WriteLine("=======================================================");
+
+            // Construcción del texto
+            var roleLabel = GetRoleLabel(_userRole);
+            if (!string.IsNullOrEmpty(_userName))
+            {
+                _userDisplayInfo = $"{_userName} - {roleLabel}";
+            }
+            else
+            {
+                _userDisplayInfo = $"SIN USUARIO - {roleLabel}";
             }
 
             StateHasChanged();
+        }
+    }
+
+    private void BuildUserDisplayInfo()
+    {
+        var roleLabel = GetRoleLabel(_userRole);
+
+        if (!string.IsNullOrWhiteSpace(_userName) && _userRole > 0)
+        {
+            // Ejemplo: PepeHonguito - Admin
+            _userDisplayInfo = $"{_userName} - {roleLabel}";
+        }
+        else if (!string.IsNullOrWhiteSpace(_userName))
+        {
+            // Si hay usuario pero no rol definido
+            _userDisplayInfo = _userName;
+        }
+        else if (_userRole > 0)
+        {
+            // Si hay rol pero no se pudo extraer el nombre del usuario
+            _userDisplayInfo = roleLabel;
+        }
+        else
+        {
+            // Sin sesión iniciada
+            _userDisplayInfo = "Inicie sesión";
         }
     }
 
@@ -132,19 +212,22 @@
 
     private async Task Logout()
     {
-        _userName = string.Empty;
-        _userRole = 0;
-        // Regla de Negocio: Si es Admin (Rol 1), elimina la OwnerApiKey al cerrar sesión
+        // Si era Admin (Rol 1), elimina la OwnerApiKey al cerrar sesión
         if (_userRole == 1)
         {
             await VaultService.SaveOwnerApiKeyAsync(string.Empty);
         }
 
+        _userName = string.Empty;
+        _userRole = 0;
+
+        // Actualizar la variable para reflejar "Inicie sesión"
+        BuildUserDisplayInfo();
+
         await VaultService.ClearSessionAsync();
         StateHasChanged();
         NavManager.NavigateTo("login", forceLoad: true);
     }
-
     private void ToggleDarkMode()
     {
         _isDarkMode = !_isDarkMode;
