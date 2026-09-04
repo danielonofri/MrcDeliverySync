@@ -115,17 +115,9 @@
     {
         if (firstRender)
         {
-            // 1. Obtener la versión de la app
             _appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
-
-            // 2. Obtener el Rol desde el Vault
             _userRole = await VaultService.GetUserRoleAsync();
-
             var token = await VaultService.GetAuthTokenAsync();
-
-            Console.WriteLine("================= DEPURACIÓN DE TOKEN =================");
-            Console.WriteLine($"1. Rol obtenido del Vault: {_userRole}");
-            Console.WriteLine($"2. Token obtenido: '{token}'");
 
             if (!string.IsNullOrEmpty(token))
             {
@@ -134,27 +126,15 @@
                     var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
                     var jwtToken = handler.ReadJwtToken(token);
 
-                    Console.WriteLine("3. CLAIMS ENCONTRADOS DENTRO DEL TOKEN:");
-                    foreach (var claim in jwtToken.Claims)
-                    {
-                        Console.WriteLine($"   - Tipo: {claim.Type} | Valor: {claim.Value}");
-                    }
-
                     _userName = JwtHelper.GetUsernameFromToken(token);
-                    Console.WriteLine($"4. Resultado de JwtHelper.GetUsernameFromToken: '{_userName}'");
+
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"ERROR al leer el token JWT: {ex.Message}");
                 }
             }
-            else
-            {
-                Console.WriteLine("3. El token devuelto por VaultService está VACÍO o NULO.");
-            }
-            Console.WriteLine("=======================================================");
 
-            // Construcción del texto
             var roleLabel = GetRoleLabel(_userRole);
             if (!string.IsNullOrEmpty(_userName))
             {
