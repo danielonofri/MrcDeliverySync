@@ -141,7 +141,7 @@
             Snackbar.Add("El dispositivo no tiene una OwnerApiKey vinculada.", Severity.Error);
             return;
         }
-
+        Console.WriteLine($"Attempting login with Licencia: {_licencia}, Punto de Venta: {_ptoVta}, Usuario: {_username}, Password: {_password}, OwnerApiKey: {_storedApiKey}");
         // Endpoint: /api/v1/owner/auth/login
         var result = await AuthClient.LoginAsync(_licencia, _username, _password, _ptoVta, _storedApiKey);
         if (result != null)
@@ -151,7 +151,7 @@
             // --- REGLA ADMIN (ROL 1) ---
             // Si el usuario es Admin (Rol 1), eliminamos la OwnerApiKey del Vault
             // para que la próxima vez que se requiera acceso pida reconfiguración.
-            if (result.Rol == 1)
+            if (result.Rol == 1 || result.Rol == 2)
             {
                 // Sobrescribe la clave con nulo/vacío para que el login vuelva a pedirla
                 await VaultService.SaveOwnerApiKeyAsync(string.Empty);

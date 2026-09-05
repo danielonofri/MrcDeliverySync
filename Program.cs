@@ -14,7 +14,10 @@ var builder = WebApplication.CreateBuilder(args);
 //     .Enrich.FromLogContext());
 // --- SERVICIOS BLAZOR NET 10 ---
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DetailedErrors = true; // Permite ver el StackTrace completo del error C#
+    });
 
 // --- MUDBLAZOR ---
 builder.Services.AddMudServices();
@@ -24,14 +27,42 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IAudioService, AudioService>();
 builder.Services.AddScoped<IAuthVaultService, AuthVaultService>();
 
-builder.Services.AddHttpClient<AuthApiClient>(client =>
+// --- REGISTRO DE HTTP CLIENT CON LOGGING NATIVO ---
+builder.Services.AddHttpClient<AuthApiClient>((serviceProvider, client) =>
 {
-    var baseUrl = builder.Configuration["ApiSettings:AuthApiBaseUrl"]
-                  ?? "https://mrctablet.com/PedidosYaApi/";
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+
+    // Leer valor de appsettings.json
+    var rawUrl = configuration["ApiSettings:AuthApiBaseUrl"];
+
+    // Imprimir el resultado en la consola y en el pipeline de logs nativo
+    Console.WriteLine($"==================================================");
+    Console.WriteLine($"[CONFIG-CHECK] Valor en appsettings: '{rawUrl}'");
+    Console.WriteLine($"==================================================");
+
+    logger.LogWarning("[CONFIG-CHECK] Valor leído de 'ApiSettings:AuthApiBaseUrl': {RawUrl}", rawUrl ?? "(NULL)");
+
+    // Usar el valor o fallback seguro a mrcapp.net
+    var baseUrl = !string.IsNullOrWhiteSpace(rawUrl) ? rawUrl : "https://mrcapp.net/PedidosYaApi/";
+
+    if (!baseUrl.EndsWith("/"))
+    {
+        baseUrl += "/";
+    }
 
     client.BaseAddress = new Uri(baseUrl);
     client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
 });
+
+// builder.Services.AddHttpClient<AuthApiClient>(client =>
+// {
+//     var baseUrl = builder.Configuration["ApiSettings:AuthApiBaseUrl"]
+//                   ?? "https://mrctablet.com/PedidosYaApi/";
+
+//     client.BaseAddress = new Uri(baseUrl);
+//     client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
+// });
 
 // Registrar servicios de almacenamiento protegido para la PWA
 builder.Services.AddDataProtection();
