@@ -110,34 +110,58 @@ namespace MrcDeliverySync.Repositories
         {
             try
             {
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/v1/owner/auth/robots-status");
+
+                // Adjuntar el Token Bearer desde IAuthVaultService igual que en las demás peticiones
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug($"❌ [ROBOTS FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+
+                    return new List<RobotStatusDto>
+            {
+                new RobotStatusDto
+                {
+                    IdRobot = "SERVER",
+                    Estado = "OFFLINE",
+                    UltimoMensaje = $"Error API ({(int)response.StatusCode})",
+                    UltimoLatido = DateTime.MinValue
+                }
+            };
+                }
+
                 var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 };
 
-                var result = await _http.GetFromJsonAsync<IEnumerable<RobotStatusDto>>(
-                    "api/v1/owner/auth/robots-status",
-                    options
-                );
-
+                var result = await response.Content.ReadFromJsonAsync<IEnumerable<RobotStatusDto>>(options);
                 return result ?? new List<RobotStatusDto>();
             }
             catch (Exception ex)
             {
-                _logger.LogDebug($"⚠️ ERROR AL OBTENER ROBOTS: {ex.Message}" + Environment.NewLine + _http.BaseAddress + "api/v1/owner/auth/robots-status");
-                Console.WriteLine($"⚠️ ERROR AL OBTENER ROBOTS: {ex.Message}");
+                _logger.LogDebug($"⚠️ ERROR AL OBTENER ROBOTS: {ex.Message}");
 
-                // Devolver el estado explícito de caída para la UI
                 return new List<RobotStatusDto>
-        {
-            new RobotStatusDto
-            {
-                IdRobot = "SERVER",
-                Estado = "OFFLINE",
-                UltimoMensaje = "Sin conexión con la API",
-                UltimoLatido = DateTime.MinValue
-            }
-        };
+                        {
+                            new RobotStatusDto
+                            {
+                                IdRobot = "SERVER",
+                                Estado = "OFFLINE",
+                                UltimoMensaje = "Sin conexión con la API",
+                                UltimoLatido = DateTime.MinValue
+                            }
+                        };
             }
         }
 

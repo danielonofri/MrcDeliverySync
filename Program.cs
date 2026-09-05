@@ -3,7 +3,7 @@ using MrcDeliverySync.Repositories;
 using MrcDeliverySync.Services;
 using MudBlazor.Services;
 using Serilog;
-
+using Microsoft.AspNetCore.DataProtection; // <-- Asegúrate de que esté arriba o dentro del bloque
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -65,7 +65,13 @@ builder.Services.AddHttpClient<AuthApiClient>((serviceProvider, client) =>
 // });
 
 // Registrar servicios de almacenamiento protegido para la PWA
-builder.Services.AddDataProtection();
+// Registrar servicios de almacenamiento protegido para la PWA
+var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+var keysFolder = Path.Combine(commonData, "MrcDeliverySyncKeys");
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysFolder))
+    .SetApplicationName("MrcDeliverySync");
 // Forzar un Shutdown rápido (2 segundos máximo de espera para circuitos WebSocket)
 builder.Services.Configure<HostOptions>(options =>
 {

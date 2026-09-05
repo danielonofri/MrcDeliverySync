@@ -26,7 +26,8 @@
                     @foreach (var robot in _robots)
                     {
                         bool online = robot.IsOnline(3);
-                        <MudTooltip Text="@($"Último informe: {robot.UltimoLatidoLocal:HH:mm:ss} | {robot.UltimoMensaje}")">
+                        <MudTooltip
+                            Text="@($"Último informe: {robot.UltimoLatidoLocal:HH:mm:ss} | {robot.UltimoMensaje} | GMT: {robot.UltimoLatido.ToUniversalTime():yyyy-MM-dd HH:mm:ss}")">
                             <MudChip T="string" Color="@(online ? Color.Success : Color.Error)" Size="Size.Small"
                                      Variant="Variant.Filled"
                                      Icon="@(online ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)">
