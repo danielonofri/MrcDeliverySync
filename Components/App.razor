@@ -8,7 +8,8 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <title>MrcDeliverySync</title>
 
-    <base href="/MrcDeliverySync/" />
+    <base href="@(Env.IsDevelopment() ? "/" : "/MrcDeliverySync/")" />
+    @* <base href="/MrcDeliverySync/" /> *@
 
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/site.css" />

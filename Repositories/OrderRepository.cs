@@ -37,7 +37,7 @@ namespace MrcDeliverySync.Repositories
             }
         }
 
-        public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsync(string sucursalId)
+        public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsyncDb(string sucursalId)
         {
             using var db = new SqlConnection(_connectionString);
 
@@ -335,10 +335,12 @@ namespace MrcDeliverySync.Repositories
                 {
                     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                     Console.WriteLine("🔑 [AUTH] Token Bearer adjuntado a la petición.");
+                    _logger.LogDebug("🔑 [AUTH] Token Bearer adjuntado a la petición.");
                 }
                 else
                 {
                     Console.WriteLine("⚠️ [AUTH WARN] GetAuthTokenAsync() devolvió nulo o vacío.");
+                    _logger.LogWarning("⚠️ [AUTH WARN] GetAuthTokenAsync() devolvió nulo o vacío.");
                 }
 
                 var response = await _http.SendAsync(request);
@@ -346,12 +348,12 @@ namespace MrcDeliverySync.Repositories
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogDebug($"❌ [PREPARED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    _logger.LogError($"❌ [PREPARED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
                     Console.WriteLine($"❌ [PREPARED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
                     return false;
                 }
 
-                _logger.LogDebug($"✅ [PREPARED OK] Orden #{code} marcada como PREPARED.");
+                _logger.LogError($"✅ [PREPARED OK] Orden #{code} marcada como PREPARED.");
                 // Console.WriteLine($"✅ [PREPARED OK] Orden #{code} marcada como PREPARED.");
                 return true;
             }
@@ -387,5 +389,48 @@ namespace MrcDeliverySync.Repositories
                 return false;
             }
         }
+
+        #region Nuevos Metodos para obtener pedidos activos consolidados desde la API
+        public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsync(string sucursalId)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/v1/owner/orders/active-consolidated");
+
+                // Adjuntamos el Token Bearer del usuario activo
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"❌ [ACTIVE ORDERS FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return new List<OrderSummaryDto>();
+                }
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var result = await response.Content.ReadFromJsonAsync<IEnumerable<OrderSummaryDto>>(options);
+                return result ?? new List<OrderSummaryDto>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [ACTIVE ORDERS EXCEPTION]: {ex.Message}");
+                return new List<OrderSummaryDto>();
+            }
+        }
+
+
+        #endregion Nuevos Metodos para obtener pedidos activos consolidados desde la API
     }
 }
