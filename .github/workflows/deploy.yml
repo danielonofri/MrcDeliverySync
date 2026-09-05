@@ -20,11 +20,17 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # 3. Compilar apuntando directamente al proyecto (.csproj)
+      # 3. Compilar el proyecto .NET
       - name: Publish App
         run: dotnet publish ./MrcDeliverySync.csproj -c Release -o ./publish
 
-      # 4. Transferir los archivos por SFTP con los nombres de parametros correctos
+      # 4. Eliminar los archivos sensibles del build antes de subir al servidor
+      - name: Clean sensitive configs from build
+        run: |
+          rm -f ./publish/appsettings.Production.json
+          rm -f ./publish/web.config
+
+      # 5. Transferir los archivos por SFTP con los parámetros exactos requeridos
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
@@ -34,5 +40,5 @@ jobs:
           port: 22
           local_path: './publish/*'
           remote_path: ${{ secrets.SERVER_TARGET_DIR }}
-          delete_remote: false
-          exclude: 'appsettings.Production.json, web.config'
+          delete_remote_files: false
+          sftp_only: true
