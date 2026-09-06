@@ -17,7 +17,7 @@ namespace MrcDeliverySync.Models
         public string? ExpeditionType { get; set; }
         public string SucursalId { get; set; } = string.Empty;
         public DeliveryOperator Operator { get; set; }
-
+        public List<OrderItemDto> Items { get; set; } = new();
         public int MinutesElapsed
         {
             get

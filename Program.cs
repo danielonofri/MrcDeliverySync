@@ -26,25 +26,26 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IAudioService, AudioService>();
 builder.Services.AddScoped<IAuthVaultService, AuthVaultService>();
+// Registrar servicio de estado global de configuración
+builder.Services.AddSingleton<AppSettingsState>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var state = new AppSettingsState();
 
+    // Asignar el valor inicial de appsettings.json
+    var rawUrl = config["ApiSettings:AuthApiBaseUrl"] ?? "https://localhost:7046/";
+    state.SetApiUrl(rawUrl);
+
+    return state;
+});
 // --- REGISTRO DE HTTP CLIENT CON LOGGING NATIVO ---
-builder.Services.AddHttpClient<AuthApiClient>((serviceProvider, client) =>
+builder.Services.AddHttpClient<IOrderRepository, OrderRepository>((serviceProvider, client) =>
 {
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();
     var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 
-    // Leer valor de appsettings.json
     var rawUrl = configuration["ApiSettings:AuthApiBaseUrl"];
-
-    // Imprimir el resultado en la consola y en el pipeline de logs nativo
-    Console.WriteLine($"==================================================");
-    Console.WriteLine($"[CONFIG-CHECK] Valor en appsettings: '{rawUrl}'");
-    Console.WriteLine($"==================================================");
-
-    logger.LogWarning("[CONFIG-CHECK] Valor leído de 'ApiSettings:AuthApiBaseUrl': {RawUrl}", rawUrl ?? "(NULL)");
-
-    // Usar el valor o fallback seguro a mrcapp.net
-    var baseUrl = !string.IsNullOrWhiteSpace(rawUrl) ? rawUrl : "https://mrcapp.net/PedidosYaApi/";
+    var baseUrl = !string.IsNullOrWhiteSpace(rawUrl) ? rawUrl : "https://localhost:7046/";
 
     if (!baseUrl.EndsWith("/"))
     {
@@ -53,16 +54,18 @@ builder.Services.AddHttpClient<AuthApiClient>((serviceProvider, client) =>
 
     client.BaseAddress = new Uri(baseUrl);
     client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
+
+    string pwaHostname = Environment.MachineName;
+    string apiHost = client.BaseAddress.Host;
+
+    // Console.WriteLine("==================================================");
+    // Console.WriteLine($"[CONFIG-CHECK] PWA Hostname: {pwaHostname}");
+    // Console.WriteLine($"[CONFIG-CHECK] API Base URL: {client.BaseAddress} (Host: {apiHost})");
+    // Console.WriteLine("==================================================");
+
+    logger.LogInformation("[CONFIG-CHECK] PWA Hostname: {PwaHostname} | API Host: {ApiHost} | Base URL: {BaseUrl}",
+        pwaHostname, apiHost, client.BaseAddress);
 });
-
-// builder.Services.AddHttpClient<AuthApiClient>(client =>
-// {
-//     var baseUrl = builder.Configuration["ApiSettings:AuthApiBaseUrl"]
-//                   ?? "https://mrctablet.com/PedidosYaApi/";
-
-//     client.BaseAddress = new Uri(baseUrl);
-//     client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
-// });
 
 // Registrar servicios de almacenamiento protegido para la PWA
 // Registrar servicios de almacenamiento protegido para la PWA

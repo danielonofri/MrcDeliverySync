@@ -11,7 +11,7 @@
 @inject IJSRuntime JS
 @inject IConfiguration Configuration
 @inject ILogger<Login> Logger
-
+@inject AppSettingsState AppState
 <PageTitle>Dashboard - MrcDelivery Sync</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
@@ -26,13 +26,15 @@
                     @foreach (var robot in _robots)
                     {
                         bool online = robot.IsOnline(3);
-                        <MudTooltip
-                            Text="@($"Último informe: {robot.UltimoLatidoLocal:HH:mm:ss} | {robot.UltimoMensaje} | GMT: {robot.UltimoLatido.ToUniversalTime():yyyy-MM-dd HH:mm:ss}")">
-                            <MudChip T="string" Color="@(online ? Color.Success : Color.Error)" Size="Size.Small"
-                                     Variant="Variant.Filled"
-                                     Icon="@(online ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)">
-                                @robot.IdRobot: @(online ? "ONLINE" : "CAÍDO")
-                            </MudChip>
+                        <MudTooltip Placement="Placement.Bottom">
+                            <TooltipContent>
+                                <div style="white-space: pre-line; text-align: center; line-height: 1.4;">
+                                    @TooltipText
+                                </div>
+                            </TooltipContent>
+                            <ChildContent>
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">SYNC: ONLINE</MudChip>
+                            </ChildContent>
                         </MudTooltip>
                     }
                 }
@@ -52,7 +54,9 @@
                 <MudCheckBox T="bool" @bind-Value="_enableDelaySound" Color="Color.Warning" Dense="true">
                     <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" Class="mr-1" /> Audio Demoras
                 </MudCheckBox>
-
+                @* <MudCheckBox @bind-Value="_enableRefreshSound" Color="Color.Primary" Dense="true">
+                    <span style="font-size: 0.85rem;"> Audio Recarga</span>
+                </MudCheckBox> *@
                 @* Selector Fichas / Tabla *@
                 <MudToggleGroup T="ViewMode" Value="_currentViewMode" ValueChanged="OnViewModeChanged"
                                 Color="Color.Primary" Size="Size.Small">
@@ -97,7 +101,10 @@
     private DotNetObjectReference<Home>? _dotNetRef;
     private bool _enableNewOrderSound = true;
     private bool _enableDelaySound = true;
-
+    private bool _enableRefreshSound = true;
+    private string TooltipText =>
+    $"Último informe: {DateTime.Now:HH:mm:ss} || GMT: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}\n" +
+    $"PWA Host: {AppState.PwaHost} || API Host: {AppState.ApiHost} || Sql: {AppState.SqlServer}";
     protected override async Task OnInitializedAsync()
     {
         // Leer intervalo desde configuración o usar 30s por defecto
@@ -125,6 +132,14 @@
             _robots = await OrderRepository.GetRobotsStatusAsync();
 
             // Si hay algún robot caído o demorado, emitir alerta
+            foreach (var r in _robots)
+            {
+                Logger.LogInformation($"[ROBOT CHECK] ID: {r.IdRobot} | Last: {r.UltimoLatido} | Local: {r.UltimoLatidoLocal} | IsOnline: {r.IsOnline(3)}");
+            }
+            if (!_robots.Any())
+            {
+                Console.WriteLine($"[NO hay robts ]");
+            }
             bool hasOfflineRobots = _robots.Any(r => !r.IsOnline(3));
             if (hasOfflineRobots && _enableDelaySound)
             {
@@ -179,7 +194,7 @@
                 var receivedOrder = _orders.FirstOrDefault(o => o.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase));
                 if (receivedOrder != null)
                 {
-                    await OrderRepository.UpdateOrderStatusAsync(receivedOrder.Id, "ACCEPTED", receivedOrder.Operator);
+                    await OrderRepository.UpdateOrderStatusAsync(receivedOrder.Code, "ACCEPTED", receivedOrder.Operator);
                     Snackbar.Add($"Pedido #{receivedOrder.ShortCode} ACEPTADO con atajo [A]", Severity.Success);
                     await LoadOrdersAsync();
                 }
@@ -189,7 +204,7 @@
                 var acceptedOrder = _orders.FirstOrDefault(o => o.Status.Equals("ACCEPTED", StringComparison.OrdinalIgnoreCase));
                 if (acceptedOrder != null)
                 {
-                    await OrderRepository.UpdateOrderStatusAsync(acceptedOrder.Id, "PREPARED", acceptedOrder.Operator);
+                    await OrderRepository.UpdateOrderStatusAsync(acceptedOrder.Code, "PREPARED", acceptedOrder.Operator);
                     Snackbar.Add($"Pedido #{acceptedOrder.ShortCode} marcado PREPARADO con atajo [R]", Severity.Info);
                     await LoadOrdersAsync();
                 }
@@ -199,7 +214,7 @@
                 var preparedOrder = _orders.FirstOrDefault(o => o.Status.Equals("PREPARED", StringComparison.OrdinalIgnoreCase));
                 if (preparedOrder != null)
                 {
-                    await OrderRepository.UpdateOrderStatusAsync(preparedOrder.Id, "DELIVERED", preparedOrder.Operator);
+                    await OrderRepository.UpdateOrderStatusAsync(preparedOrder.Code, "DELIVERED", preparedOrder.Operator);
                     Snackbar.Add($"Pedido #{preparedOrder.ShortCode} ENTREGADO con atajo [E]", Severity.Success);
                     await LoadOrdersAsync();
                 }

@@ -10,7 +10,7 @@ namespace MrcDeliverySync.Models
         public string? UrlPrepared { get; set; }
         public string? Token { get; set; }
         public string? RawJson { get; set; }
-        public List<OrderItemDto> Items { get; set; } = new();
+
     }
 
     public class OrderItemDto

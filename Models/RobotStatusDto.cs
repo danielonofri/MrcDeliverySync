@@ -18,6 +18,8 @@ public class RobotStatusDto
     [JsonPropertyName("ServerTime")]
     public DateTimeOffset ServerTime { get; set; }
 
+    [JsonPropertyName("SqlServerName")]
+    public string SqlServerName { get; set; } = string.Empty;
     // Evaluación directa de UTC contra UTC (3 minutos de tolerancia)
     public bool IsOnline(int toleranceMinutes = 3)
     {

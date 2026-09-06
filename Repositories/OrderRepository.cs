@@ -18,23 +18,23 @@ namespace MrcDeliverySync.Repositories
 {
     public class OrderRepository : IOrderRepository
     {
+        private readonly AppSettingsState _appState;
         private readonly string _connectionString;
         private readonly HttpClient _http;
         private readonly IAuthVaultService _vaultService;
         private readonly ILogger<OrderRepository> _logger;
-        public OrderRepository(IConfiguration configuration, HttpClient http, IAuthVaultService vaultService, ILogger<OrderRepository> logger)
+        public OrderRepository(IConfiguration configuration,
+                                AppSettingsState appState,
+                                HttpClient http,
+                                IAuthVaultService vaultService,
+                                ILogger<OrderRepository> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new System.InvalidOperationException("Cadena de conexión 'DefaultConnection' no configurada.");
             _http = http;
             _vaultService = vaultService;
             _logger = logger;
-            string baseUrl = configuration.GetValue<string>("ApiSettings:AuthApiBaseUrl") ?? "";
-            // Asignar BaseAddress si no está configurada previamente
-            if (_http.BaseAddress == null && !string.IsNullOrWhiteSpace(baseUrl))
-            {
-                _http.BaseAddress = new Uri(baseUrl);
-            }
+            _appState = appState;
         }
 
         public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsyncDb(string sucursalId)
@@ -95,16 +95,49 @@ namespace MrcDeliverySync.Repositories
 
             return order;
         }
-
-        public async Task<bool> UpdateOrderStatusAsync(int idOrder, string newStatus, DeliveryOperator deliveryOperator)
+        public async Task<bool> UpdateOrderStatusAsync(string orderCode, string newStatus, DeliveryOperator deliveryOperator)
         {
-            using var db = new SqlConnection(_connectionString);
-            string sql = @"UPDATE dbo.PedidosYa_Orders 
-                           SET Status = @newStatus 
-                           WHERE Id = @idOrder";
-            int rows = await db.ExecuteAsync(sql, new { newStatus, idOrder });
-            return rows > 0;
+            try
+            {
+                // Ruta relativa según la dirección base de appsettings.json
+                string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false";
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+
+                // Adjuntamos el Token Bearer desde IAuthVaultService[cite: 2]
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                using var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"❌ [DELIVERED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return false;
+                }
+
+                _logger.LogInformation($"✅ [DELIVERED OK] Orden #{orderCode} marcada como DELIVERED.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [DELIVERED EXCEPTION] Error al procesar entrega de orden #{orderCode}: {ex.Message}");
+                return false;
+            }
         }
+        // public async Task<bool> UpdateOrderStatusAsync(int idOrder, string newStatus, DeliveryOperator deliveryOperator)
+        // {
+        //     using var db = new SqlConnection(_connectionString);
+        //     string sql = @"UPDATE dbo.PedidosYa_Orders 
+        //                    SET Status = @newStatus 
+        //                    WHERE Id = @idOrder";
+        //     int rows = await db.ExecuteAsync(sql, new { newStatus, idOrder });
+        //     return rows > 0;
+        // }
 
         public async Task<IEnumerable<RobotStatusDto>> GetRobotsStatusAsync()
         {
@@ -115,11 +148,11 @@ namespace MrcDeliverySync.Repositories
                     "api/v1/owner/auth/robots-status");
 
                 // Adjuntar el Token Bearer desde IAuthVaultService igual que en las demás peticiones
-                var token = await _vaultService.GetAuthTokenAsync();
-                if (!string.IsNullOrEmpty(token))
-                {
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                }
+                // var token = await _vaultService.GetAuthTokenAsync();
+                // if (!string.IsNullOrEmpty(token))
+                // {
+                //     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                // }
 
                 var response = await _http.SendAsync(request);
 
@@ -129,15 +162,15 @@ namespace MrcDeliverySync.Repositories
                     _logger.LogDebug($"❌ [ROBOTS FAIL] Status: {response.StatusCode} | Body: {errorContent}");
 
                     return new List<RobotStatusDto>
-            {
-                new RobotStatusDto
-                {
-                    IdRobot = "SERVER",
-                    Estado = "OFFLINE",
-                    UltimoMensaje = $"Error API ({(int)response.StatusCode})",
-                    UltimoLatido = DateTime.MinValue
-                }
-            };
+                                {
+                                    new RobotStatusDto
+                                    {
+                                        IdRobot = "SERVER",
+                                        Estado = "OFFLINE",
+                                        UltimoMensaje = $"Error API ({(int)response.StatusCode})",
+                                        UltimoLatido = DateTime.MinValue
+                                    }
+                                };
                 }
 
                 var options = new JsonSerializerOptions
@@ -145,8 +178,18 @@ namespace MrcDeliverySync.Repositories
                     PropertyNameCaseInsensitive = true
                 };
 
-                var result = await response.Content.ReadFromJsonAsync<IEnumerable<RobotStatusDto>>(options);
-                return result ?? new List<RobotStatusDto>();
+                // 1. Deserializamos y convertimos a List para poder evaluar los elementos
+                var rawList = await response.Content.ReadFromJsonAsync<IEnumerable<RobotStatusDto>>(options);
+                var resultList = rawList?.ToList() ?? new List<RobotStatusDto>();
+
+                // 2. Extraemos el SqlServerName del primer DTO que lo traiga y actualizamos el AppState
+                var robotConServer = resultList.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.SqlServerName));
+                if (robotConServer != null)
+                {
+                    _appState.SqlServer = robotConServer.SqlServerName;
+                }
+
+                return resultList;
             }
             catch (Exception ex)
             {
@@ -391,7 +434,7 @@ namespace MrcDeliverySync.Repositories
         }
 
         #region Nuevos Metodos para obtener pedidos activos consolidados desde la API
-        public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsync(string sucursalId)
+        public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsyncDeprecated(string sucursalId)
         {
             try
             {
@@ -429,8 +472,70 @@ namespace MrcDeliverySync.Repositories
                 return new List<OrderSummaryDto>();
             }
         }
+        public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsync(string sucursalId)
+        {
+            var consolidatedList = new List<OrderSummaryDto>();
 
+            try
+            {
+                // 1. Crear las tareas en paralelo para cada operador
+                var pedidosYaTask = GetVigentesPedidosYaAsync();
+                // var uberEatsTask = GetVigentesUberEatsAsync(); // Futuro
+                // var rappiTask = GetVigentesRappiAsync();       // Futuro
 
+                // 2. Esperar a que todas las APIs respondan
+                await Task.WhenAll(pedidosYaTask /*, uberEatsTask, rappiTask */);
+
+                // 3. Unir los resultados normalizados
+                if (pedidosYaTask.Result != null)
+                {
+                    consolidatedList.AddRange(pedidosYaTask.Result);
+                }
+
+                // if (uberEatsTask.Result != null) consolidatedList.AddRange(uberEatsTask.Result);
+                // if (rappiTask.Result != null) consolidatedList.AddRange(rappiTask.Result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [CONSOLIDATED EXCEPTION]: {ex.Message}");
+            }
+
+            return consolidatedList;
+        }
+        public async Task<IEnumerable<OrderSummaryDto>> GetVigentesPedidosYaAsync()
+        {
+            try
+            {
+                // Ruta relativa usando el BaseUrl configurado en Program.cs
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/v1/pos-order-bridge/order/pedidosya/getVigentes");
+
+                // Adjuntamos el token Bearer desde el Vault
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                using var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug($"❌ [GET VIGENTES FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return new List<OrderSummaryDto>();
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<List<OrderSummaryDto>>();
+                return result ?? new List<OrderSummaryDto>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [GET VIGENTES EXCEPTION]: {ex.Message}");
+                return new List<OrderSummaryDto>();
+            }
+        }
         #endregion Nuevos Metodos para obtener pedidos activos consolidados desde la API
     }
 }

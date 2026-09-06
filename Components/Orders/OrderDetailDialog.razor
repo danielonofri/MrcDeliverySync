@@ -70,14 +70,14 @@
 
     <DialogActions>
         @* CANCELAR a la izquierda (visible en RECEIVED, ACCEPTED e INTEGRATED) *@
-        @if (OrderSummary.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase) ||
+        @* @if (OrderSummary.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase) ||
              OrderSummary.Status.Equals("ACCEPTED", StringComparison.OrdinalIgnoreCase) ||
              OrderSummary.Status.Equals("INTEGRATED", StringComparison.OrdinalIgnoreCase))
         {
             <MudButton Color="Color.Error" Variant="Variant.Outlined" OnClick="@(() => UpdateStatus("REJECTED"))">
                 CANCELAR
             </MudButton>
-        }
+        } *@
 
         <MudSpacer />
 
@@ -111,6 +111,96 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public OrderSummaryDto OrderSummary { get; set; } = null!;
+
+    private OrderDetailDto _orderDetail = null!;
+    private bool _isLoading = false; // Ya no hay espera de red
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // Si la orden ya trae Items (venga de la API o cargada previamente), no consulta a SQL
+            if (OrderSummary.Items != null && OrderSummary.Items.Any())
+            {
+                _orderDetail = new OrderDetailDto
+                {
+                    Id = OrderSummary.Id,
+                    Code = OrderSummary.Code,
+                    ShortCode = OrderSummary.ShortCode,
+                    CustomerName = OrderSummary.CustomerName,
+                    CustomerPhone = OrderSummary.CustomerPhone,
+                    ExpeditionType = OrderSummary.ExpeditionType,
+                    TotalAmount = OrderSummary.TotalAmount,
+                    Status = OrderSummary.Status,
+                    Items = OrderSummary.Items
+                };
+            }
+            else
+            {
+                // Fallback para consultas tradicionales SQL
+                _orderDetail = await OrderRepository.GetOrderDetailAsync(OrderSummary.Id, OrderSummary.Operator)
+                 ?? new OrderDetailDto
+                 {
+                     Id = OrderSummary.Id,
+                     Code = OrderSummary.Code,
+                     ShortCode = OrderSummary.ShortCode,
+                     CustomerName = OrderSummary.CustomerName,
+                     CustomerPhone = OrderSummary.CustomerPhone,
+                     ExpeditionType = OrderSummary.ExpeditionType,
+                     TotalAmount = OrderSummary.TotalAmount,
+                     Status = OrderSummary.Status,
+                     Items = OrderSummary.Items ?? new()
+                 };
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar detalle: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    private async Task UpdateStatus(string status)
+    {
+        bool success = false;
+        var orderCode = OrderSummary.Code;
+
+        switch (status.ToUpper())
+        {
+            case "ACCEPTED":
+                success = await OrderRepository.AcceptOrderAsync(orderCode);
+                break;
+            case "REJECTED":
+                success = await OrderRepository.RejectOrderAsync(orderCode);
+                break;
+            case "PREPARED":
+                success = await OrderRepository.MarkAsPreparedAsync(orderCode);
+                break;
+            default:
+                success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Code, status, OrderSummary.Operator);
+                break;
+        }
+
+        if (success)
+        {
+            Snackbar.Add($"Estado actualizado a {status}", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add($"No se pudo actualizar el estado a {status}", Severity.Warning);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
+
+@* @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public OrderSummaryDto OrderSummary { get; set; } = null!;
 
@@ -170,45 +260,5 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
-}
-
-@* @code {
-    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
-    [Parameter] public OrderSummaryDto OrderSummary { get; set; } = null!;
-
-    private OrderDetailDto? _orderDetail;
-    private bool _isLoading = true;
-
-    protected override async Task OnInitializedAsync()
-    {
-        _isLoading = true;
-        try
-        {
-            _orderDetail = await OrderRepository.GetOrderDetailAsync(OrderSummary.Id, OrderSummary.Operator);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error al cargar detalle: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
-
-    private async Task UpdateStatus(string status)
-    {
-        var success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Id, status, OrderSummary.Operator);
-        if (success)
-        {
-            Snackbar.Add($"Estado actualizado a {status}", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(true));
-        }
-        else
-        {
-            Snackbar.Add("No se pudo actualizar el estado", Severity.Warning);
-        }
-    }
-
-    private void Cancel() => MudDialog.Cancel();
 } *@
+
