@@ -62,7 +62,6 @@ namespace MrcDeliverySync.Repositories
 
             return await db.QueryAsync<OrderSummaryDto>(sql, new { sucursalId });
         }
-
         public async Task<OrderDetailDto?> GetOrderDetailAsync(int idOrder, DeliveryOperator deliveryOperator)
         {
             using var db = new SqlConnection(_connectionString);
@@ -129,16 +128,6 @@ namespace MrcDeliverySync.Repositories
                 return false;
             }
         }
-        // public async Task<bool> UpdateOrderStatusAsync(int idOrder, string newStatus, DeliveryOperator deliveryOperator)
-        // {
-        //     using var db = new SqlConnection(_connectionString);
-        //     string sql = @"UPDATE dbo.PedidosYa_Orders 
-        //                    SET Status = @newStatus 
-        //                    WHERE Id = @idOrder";
-        //     int rows = await db.ExecuteAsync(sql, new { newStatus, idOrder });
-        //     return rows > 0;
-        // }
-
         public async Task<IEnumerable<RobotStatusDto>> GetRobotsStatusAsync()
         {
             try
@@ -146,14 +135,6 @@ namespace MrcDeliverySync.Repositories
                 using var request = new HttpRequestMessage(
                     HttpMethod.Get,
                     "api/v1/owner/auth/robots-status");
-
-                // Adjuntar el Token Bearer desde IAuthVaultService igual que en las demás peticiones
-                // var token = await _vaultService.GetAuthTokenAsync();
-                // if (!string.IsNullOrEmpty(token))
-                // {
-                //     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                // }
-
                 var response = await _http.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
@@ -207,7 +188,6 @@ namespace MrcDeliverySync.Repositories
                         };
             }
         }
-
         public async Task<IEnumerable<RobotStatusDto>> GetRobotsStatusAsyncDb()
         {
             using var db = new SqlConnection(_connectionString);
@@ -215,7 +195,6 @@ namespace MrcDeliverySync.Repositories
                            FROM dbo.Robot_Status WITH (NOLOCK)";
             return await db.QueryAsync<RobotStatusDto>(sql);
         }
-
         public async Task<IEnumerable<RobotStatusDto>> GetRobotsStatusAsyncOld()
         {
             try
@@ -240,7 +219,6 @@ namespace MrcDeliverySync.Repositories
                 return new List<RobotStatusDto>();
             }
         }
-
         public async Task<bool> AcceptOrderAsync(string orderCode, int? preparationMinutes = null)
         {
             try
@@ -298,7 +276,6 @@ namespace MrcDeliverySync.Repositories
             //    return false;
             //}
         }
-
         public async Task<bool> RejectOrderAsync(string orderCode)
         {
             try
@@ -350,7 +327,6 @@ namespace MrcDeliverySync.Repositories
             //    return false;
             //}
         }
-
         public async Task<bool> MarkAsPreparedAsyncX(string orderCode)
         {
             try
@@ -363,7 +339,6 @@ namespace MrcDeliverySync.Repositories
                 return false;
             }
         }
-
         public async Task<bool> MarkAsPreparedAsync(string code)
         {
             try
@@ -432,7 +407,6 @@ namespace MrcDeliverySync.Repositories
                 return false;
             }
         }
-
         #region Nuevos Metodos para obtener pedidos activos consolidados desde la API
         public async Task<IEnumerable<OrderSummaryDto>> GetActiveOrdersConsolidatedAsyncDeprecated(string sucursalId)
         {
@@ -510,6 +484,74 @@ namespace MrcDeliverySync.Repositories
                 using var request = new HttpRequestMessage(
                     HttpMethod.Get,
                     "api/v1/pos-order-bridge/order/pedidosya/getVigentes");
+
+                // Adjuntamos el token Bearer desde el Vault
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                using var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug($"❌ [GET VIGENTES FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return new List<OrderSummaryDto>();
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<List<OrderSummaryDto>>();
+                return result ?? new List<OrderSummaryDto>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [GET VIGENTES EXCEPTION]: {ex.Message}");
+                return new List<OrderSummaryDto>();
+            }
+        }
+        public async Task<IEnumerable<OrderSummaryDto>> GetVigentesUberEatsAsync()
+        {
+            try
+            {
+                // Ruta relativa usando el BaseUrl configurado en Program.cs
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/v1/pos-order-bridge/order/ubereats/getVigentes");
+
+                // Adjuntamos el token Bearer desde el Vault
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                using var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug($"❌ [GET VIGENTES FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return new List<OrderSummaryDto>();
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<List<OrderSummaryDto>>();
+                return result ?? new List<OrderSummaryDto>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [GET VIGENTES EXCEPTION]: {ex.Message}");
+                return new List<OrderSummaryDto>();
+            }
+        }
+        public async Task<IEnumerable<OrderSummaryDto>> GetVigentesRappiAsync()
+        {
+            try
+            {
+                // Ruta relativa usando el BaseUrl configurado en Program.cs
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/v1/pos-order-bridge/order/rappi/getVigentes");
 
                 // Adjuntamos el token Bearer desde el Vault
                 var token = await _vaultService.GetAuthTokenAsync();

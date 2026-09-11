@@ -4,6 +4,7 @@
 @using MrcDeliverySync.Repositories
 @using MrcDeliverySync.Services
 @using MrcDeliverySync.Components.Orders
+@using MrcDeliverySync.Components.Store;
 @inject IOrderRepository OrderRepository
 @inject IAudioService AudioService
 @inject ISnackbar Snackbar
@@ -17,61 +18,87 @@
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
     @* --- ENCABEZADO CON CONTROLES VISIBLES --- *@
     <MudPaper Elevation="2" Class="pa-4 mb-4">
-        <div class="d-flex justify-space-between align-center flex-wrap gap-2">
-            <div>
-                <MudText Typo="Typo.h5" Class="fw-bold">Tablero de Despacho</MudText>
-                @* Badges de Robots *@
-                @if (_robots != null && _robots.Any())
-                {
-                    @foreach (var robot in _robots)
-                    {
-                        bool online = robot.IsOnline(3);
-                        <MudTooltip Placement="Placement.Bottom">
-                            <TooltipContent>
-                                <div style="white-space: pre-line; text-align: center; line-height: 1.4;">
-                                    @TooltipText
-                                </div>
-                            </TooltipContent>
-                            <ChildContent>
-                                <MudChip T="string" Color="Color.Success" Size="Size.Small">SYNC: ONLINE</MudChip>
-                            </ChildContent>
-                        </MudTooltip>
-                    }
-                }
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Gestión unificada | Atajos: <b>[A]</b> Aceptar | <b>[R]</b> Preparar | <b>[E]</b> Entregado
-                </MudText>
+        <div class="d-flex flex-column gap-3">
+            @* Fila Superior: Título, Ícono de Ayuda y Widget de Tienda Alineados *@
+            <div class="d-flex justify-space-between align-center flex-wrap gap-3">
+                <div class="d-flex align-center gap-3">
+                    <MudText Typo="Typo.h5" Class="fw-bold">Tablero de Despacho</MudText>
+
+                    @* --- ÍCONO DE AYUDA / INFO DISCRETO --- *@
+                    <MudTooltip Placement="Placement.Bottom">
+                        <TooltipContent>
+                            <div style="white-space: pre-line; text-align: left; line-height: 1.4; padding: 4px;">
+                                @TooltipConfiguraciones
+                            </div>
+                        </TooltipContent>
+                        <ChildContent>
+                            <MudIconButton Icon="@Icons.Material.Filled.HelpOutline"
+                                           Color="Color.Default"
+                                           Size="Size.Small" />
+                        </ChildContent>
+                    </MudTooltip>
+                </div>
+
+                @* --- WIDGET DE ESTADO DE APERTURA DE TIENDA MOVIDO A LA DERECHA --- *@
+                <div>
+                    <StoreStatusWidget />
+                </div>
             </div>
 
-            <div class="d-flex align-center gap-3">
-                @* Switches de Audio *@
-                <MudCheckBox T="bool" Value="_enableNewOrderSound" ValueChanged="OnNewOrderSoundToggle"
-                             Color="Color.Success" Dense="true">
-                    <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Size="Size.Small" Class="mr-1" /> Audio
-                    Nuevos
-                </MudCheckBox>
+            @* Fila Inferior: Badges de Robots, Atajos y Controles de Audio/Vista *@
+            <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+                <div class="d-flex align-center gap-2 flex-wrap">
+                    @* Badges de Robots *@
+                    @if (_robots != null && _robots.Any())
+                    {
+                        @foreach (var robot in _robots)
+                        {
+                            bool online = robot.IsOnline(3);
+                            <MudTooltip Placement="Placement.Bottom">
+                                <TooltipContent>
+                                    <div style="white-space: pre-line; text-align: center; line-height: 1.4;">
+                                        @TooltipText
+                                    </div>
+                                </TooltipContent>
+                                <ChildContent>
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small">SYNC: ONLINE</MudChip>
+                                </ChildContent>
+                            </MudTooltip>
+                        }
+                    }
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Gestión unificada | Atajos: <b>[A]</b> Aceptar | <b>[R]</b> Preparar | <b>[E]</b> Entregado
+                    </MudText>
+                </div>
 
-                <MudCheckBox T="bool" @bind-Value="_enableDelaySound" Color="Color.Warning" Dense="true">
-                    <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" Class="mr-1" /> Audio Demoras
-                </MudCheckBox>
-                @* <MudCheckBox @bind-Value="_enableRefreshSound" Color="Color.Primary" Dense="true">
-                    <span style="font-size: 0.85rem;"> Audio Recarga</span>
-                </MudCheckBox> *@
-                @* Selector Fichas / Tabla *@
-                <MudToggleGroup T="ViewMode" Value="_currentViewMode" ValueChanged="OnViewModeChanged"
-                                Color="Color.Primary" Size="Size.Small">
-                    <MudToggleItem Value="ViewMode.Cards" Text="Fichas">
-                        <MudIcon Icon="@Icons.Material.Filled.GridView" />
-                    </MudToggleItem>
-                    <MudToggleItem Value="ViewMode.Table" Text="Tabla">
-                        <MudIcon Icon="@Icons.Material.Filled.ViewList" />
-                    </MudToggleItem>
-                </MudToggleGroup>
+                <div class="d-flex align-center gap-3">
+                    @* Switches de Audio *@
+                    <MudCheckBox T="bool" Value="_enableNewOrderSound" ValueChanged="OnNewOrderSoundToggle"
+                                 Color="Color.Success" Dense="true">
+                        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Size="Size.Small" Class="mr-1" /> Audio
+                        Nuevos
+                    </MudCheckBox>
 
-                <MudTooltip Text="Recargar Pedidos">
-                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Default"
-                                   OnClick="LoadOrdersAsync" />
-                </MudTooltip>
+                    <MudCheckBox T="bool" @bind-Value="_enableDelaySound" Color="Color.Warning" Dense="true">
+                        <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" Class="mr-1" /> Audio Demoras
+                    </MudCheckBox>
+
+                    @* Selector Fichas / Tabla *@
+                    <MudToggleGroup T="ViewMode" Value="_currentViewMode" ValueChanged="OnViewModeChanged"
+                                    Color="Color.Primary" Size="Size.Small">
+                        <MudToggleItem Value="ViewMode.Cards" Text="Fichas">
+                            <MudIcon Icon="@Icons.Material.Filled.GridView" />
+                        </MudToggleItem>
+                        <MudToggleItem Value="ViewMode.Table" Text="Tabla">
+                            <MudIcon Icon="@Icons.Material.Filled.ViewList" />
+                        </MudToggleItem>
+                    </MudToggleGroup>
+
+                    <MudTooltip Text="Recargar Pedidos">
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Default"
+                                       OnClick="LoadOrdersAsync" />
+                    </MudTooltip>
+                </div>
             </div>
         </div>
     </MudPaper>
@@ -102,15 +129,17 @@
     private bool _enableNewOrderSound = true;
     private bool _enableDelaySound = true;
     private bool _enableRefreshSound = true;
+    private string _ApiHost = "Host desconocido";
     private string TooltipText =>
-    $"Último informe: {DateTime.Now:HH:mm:ss} || GMT: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}\n" +
+    $"Último informe: {DateTime.Now:HH:mm:ss} || GMT: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+    private string TooltipConfiguraciones =>
     $"PWA Host: {AppState.PwaHost} || API Host: {AppState.ApiHost} || Sql: {AppState.SqlServer}";
     protected override async Task OnInitializedAsync()
     {
         // Leer intervalo desde configuración o usar 30s por defecto
         _intervalSeconds = Configuration.GetValue<int>("SyncSettings:CheckIntervalSeconds", 30);
         _criticalDelayThresholdMinutes = Configuration.GetValue<int>(key: "SyncSettings:WarningThresholdMinutes", 20);
-
+        _ApiHost = Configuration.GetValue<string>("ApiSettings:AuthApiBaseUrl", "Host desconocido");
         await LoadOrdersDataOnlyAsync();
 
         // Iniciar el temporizador recurrente

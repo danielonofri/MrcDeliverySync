@@ -1,0 +1,126 @@
+﻿@using MrcDeliverySync.Repositories
+@using MrcDeliverySync.Models
+@inject IStoreRepository StoreRepository
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Store" Class="mr-2" />
+            Configurar Estado de Apertura
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div class="d-flex justify-center my-4">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <MudSelect T="string" Label="Acción Principal" @bind-Value="_selectedActionType" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("OPEN")">Abrir Tienda</MudSelectItem>
+                    <MudSelectItem Value="@("CLOSED_UNTIL")">Cerrar Tienda</MudSelectItem>
+                </MudSelect>
+
+                @if (_selectedActionType == "CLOSED_UNTIL")
+                {
+                    <MudSelect T="string" Label="Motivo de Cierre" @bind-Value="_selectedReason" Variant="Variant.Outlined">
+                        @foreach (var reason in _closureReasons)
+                        {
+                            <MudSelectItem Value="@reason.Codigo">@reason.Traduccion (@reason.Codigo)</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="int" Label="Minutos de Cierre" @bind-Value="_closingMinutes" Variant="Variant.Outlined">
+                        <MudSelectItem Value="5">5 minutos</MudSelectItem>
+                        <MudSelectItem Value="15">15 minutos</MudSelectItem>
+                        <MudSelectItem Value="30">30 minutos</MudSelectItem>
+                        <MudSelectItem Value="60">60 minutos</MudSelectItem>
+                        <MudSelectItem Value="90">90 minutos</MudSelectItem>
+                    </MudSelect>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_isLoading">Guardar Cambios</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public StoreStatusDto? CurrentStatus { get; set; }
+
+    private bool _isLoading = true;
+    private string _selectedActionType = "OPEN";
+    private string _selectedReason = "TOO_BUSY_NO_DRIVERS";
+    private int _closingMinutes = 5;
+    private List<ClosureReasonDto> _closureReasons = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CurrentStatus != null)
+        {
+            _selectedActionType = CurrentStatus.AvailabilityState == "OPEN" ? "OPEN" : "CLOSED_UNTIL";
+        }
+
+        await LoadClosureReasonsAsync();
+    }
+
+    private async Task LoadClosureReasonsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _closureReasons = await StoreRepository.GetClosureReasonsAsync();
+            if (_closureReasons.Any() && !string.IsNullOrEmpty(_closureReasons[0].Codigo))
+            {
+                _selectedReason = _closureReasons[0].Codigo;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar razones de cierre: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        try
+        {
+            bool success;
+            if (_selectedActionType == "OPEN")
+            {
+                success = await StoreRepository.UpdateStoreStatusAsync("OPEN");
+            }
+            else
+            {
+                success = await StoreRepository.UpdateStoreStatusAsync("CLOSED_UNTIL", _selectedReason, _closingMinutes);
+            }
+
+            if (success)
+            {
+                Snackbar.Add("Estado de la tienda actualizado correctamente.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Error al actualizar el estado de la tienda.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error de conexión: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

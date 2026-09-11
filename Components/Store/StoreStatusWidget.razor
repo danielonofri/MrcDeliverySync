@@ -1,0 +1,144 @@
+﻿@using MrcDeliverySync.Repositories
+@using MrcDeliverySync.Models
+@inject IStoreRepository StoreRepository
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@implements IDisposable
+
+<MudCard Elevation="2" Class="pa-2 cursor-pointer" @onclick="OpenStatusDialog">
+    <MudCardContent Class="py-1 px-2">
+        <div class="d-flex align-center justify-space-between gap-3">
+            <div class="d-flex align-center gap-2">
+                <MudAvatar Color="@GetStatusColor(_storeStatus?.AvailabilityState)" Size="Size.Small">
+                    <MudIcon Icon="@GetStatusIcon(_storeStatus?.AvailabilityState)" Size="Size.Small" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.body2" Class="fw-bold">
+                        Estado de Tienda: @GetTranslatedState(_storeStatus?.AvailabilityState)
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Original: <code>@(_storeStatus?.AvailabilityState ?? "CARGANDO...")</code>
+                        @if (!string.IsNullOrEmpty(_storeStatus?.CurrentSlotEndAt))
+                        {
+                            <span>(Hasta: @FormatSlotEnd(_storeStatus.CurrentSlotEndAt))</span>
+                        }
+                    </MudText>
+                </div>
+            </div>
+            <MudIconButton Icon="Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" />
+        </div>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private StoreStatusDto? _storeStatus;
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await FetchStoreStatusAsync();
+
+            // Configurar actualización automática cada 10 minutos
+            _cts = new CancellationTokenSource();
+            _timer = new PeriodicTimer(TimeSpan.FromMinutes(10));
+
+            _ = RunPeriodicBackgroundCheckAsync(_cts.Token);
+        }
+    }
+
+
+    private async Task RunPeriodicBackgroundCheckAsync(CancellationToken token)
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(token))
+            {
+                await FetchStoreStatusAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Salida normal al destruir el componente
+        }
+    }
+
+    private async Task FetchStoreStatusAsync()
+    {
+        try
+        {
+            var data = await StoreRepository.GetStoreStatusAsync();
+            if (data != null && data.Count > 0)
+            {
+                _storeStatus = data[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener estado de tienda: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OpenStatusDialog()
+    {
+        var parameters = new DialogParameters<StoreStatusDialog>
+        {
+            { x => x.CurrentStatus, _storeStatus }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<StoreStatusDialog>("Cambiar Estado de la Tienda", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await FetchStoreStatusAsync();
+        }
+    }
+
+    private Color GetStatusColor(string? state) => state?.ToUpper() switch
+    {
+        "OPEN" => Color.Success,
+        "CLOSED_UNTIL" or "CLOSED" or "CLOSED_TODAY" => Color.Error,
+        "INACTIVE" or "UNKNOWN" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string GetStatusIcon(string? state) => state?.ToUpper() switch
+    {
+        "OPEN" => Icons.Material.Filled.Store,
+        _ => Icons.Material.Filled.Storefront
+    };
+
+    private string GetTranslatedState(string? state) => state?.ToUpper() switch
+    {
+        "OPEN" => "Abierto",
+        "CLOSED_UNTIL" => "Cerrado temporalmente",
+        "CLOSED" => "Cerrado",
+        "CLOSED_TODAY" => "Cerrado por el resto del día",
+        "INACTIVE" => "Inactivo",
+        "UNKNOWN" => "Desconocido",
+        _ => "Desconocido"
+    };
+
+    private string FormatSlotEnd(string dateStr)
+    {
+        if (DateTime.TryParse(dateStr, out var dt))
+        {
+            return dt.ToLocalTime().ToString("HH:mm");
+        }
+        return dateStr;
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _timer?.Dispose();
+    }
+}

@@ -77,7 +77,20 @@ builder.Services.AddHttpClient<IOrderRepository, OrderRepository>((serviceProvid
     logger.LogInformation("[CONFIG-CHECK] PWA Hostname: {PwaHostname} | API Host: {ApiHost} | Base URL: {BaseUrl}",
         pwaHostname, apiHost, client.BaseAddress);
 });
+builder.Services.AddHttpClient<IStoreRepository, StoreRepository>((serviceProvider, client) =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var rawUrl = configuration["ApiSettings:AuthApiBaseUrl"];
+    var baseUrl = !string.IsNullOrWhiteSpace(rawUrl) ? rawUrl : "https://localhost:7046/";
 
+    if (!baseUrl.EndsWith("/"))
+    {
+        baseUrl += "/";
+    }
+
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
+});
 
 // Registrar servicios de almacenamiento protegido para la PWA
 var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
