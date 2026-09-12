@@ -54,7 +54,6 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public StoreStatusDto? CurrentStatus { get; set; }
-
     private bool _isLoading = true;
     private string _selectedActionType = "OPEN";
     private string _selectedReason = "TOO_BUSY_NO_DRIVERS";
@@ -63,13 +62,36 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Primero cargamos los motivos por si necesitamos asignar uno por defecto
+        await LoadClosureReasonsAsync();
+
         if (CurrentStatus != null)
         {
-            _selectedActionType = CurrentStatus.AvailabilityState == "OPEN" ? "OPEN" : "CLOSED_UNTIL";
-        }
+            string currentState = CurrentStatus.AvailabilityState?.ToUpper() ?? "OPEN";
 
-        await LoadClosureReasonsAsync();
+            if (currentState == "OPEN")
+            {
+                // Si está abierta, sugerimos la acción de cerrar temporalmente por defecto
+                _selectedActionType = "CLOSED_UNTIL";
+                _closingMinutes = 30; // Minutos sugeridos por defecto al proponer cierre
+            }
+            else if (currentState == "CLOSED_UNTIL" || currentState == "CLOSED_TODAY" || currentState == "CLOSED")
+            {
+                // Si está cerrada (temporal o todo el día), sugerimos la acción de abrir por defecto
+                _selectedActionType = "OPEN";
+                _closingMinutes = 0;
+            }
+        }
     }
+    // protected override async Task OnInitializedAsync()
+    // {
+    //     if (CurrentStatus != null)
+    //     {
+    //         _selectedActionType = CurrentStatus.AvailabilityState == "OPEN" ? "OPEN" : "CLOSED_UNTIL";
+    //     }
+
+    //     await LoadClosureReasonsAsync();
+    // }
 
     private async Task LoadClosureReasonsAsync()
     {

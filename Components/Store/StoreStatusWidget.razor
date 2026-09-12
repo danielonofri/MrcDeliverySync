@@ -1,8 +1,10 @@
 ﻿@using MrcDeliverySync.Repositories
 @using MrcDeliverySync.Models
+@using System.Globalization
 @inject IStoreRepository StoreRepository
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IConfiguration Configuration
 @implements IDisposable
 
 <MudCard Elevation="2" Class="pa-2 cursor-pointer" @onclick="OpenStatusDialog">
@@ -18,10 +20,16 @@
                     </MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary">
                         Original: <code>@(_storeStatus?.AvailabilityState ?? "CARGANDO...")</code>
-                        @if (!string.IsNullOrEmpty(_storeStatus?.CurrentSlotEndAt))
+
+                        @if (_storeStatus?.AvailabilityState?.ToUpper() == "OPEN" && !string.IsNullOrEmpty(_storeStatus?.CurrentSlotEndAt))
                         {
                             <span>(Hasta: @FormatSlotEnd(_storeStatus.CurrentSlotEndAt))</span>
                         }
+                        else if (_storeStatus?.AvailabilityState?.ToUpper() == "CLOSED_UNTIL" && !string.IsNullOrEmpty(_storeStatus?.ClosedUntil))
+                        {
+                            <span>(Hasta: @FormatSlotEnd(_storeStatus.ClosedUntil))</span>
+                        }
+                        @* Si es CLOSED_TODAY u otro estado, no imprime nada de "Hasta" *@
                     </MudText>
                 </div>
             </div>
@@ -31,6 +39,7 @@
 </MudCard>
 
 @code {
+    private int _refreshDelaySeconds = 3; // Valor por defecto
     private StoreStatusDto? _storeStatus;
     private PeriodicTimer? _timer;
     private CancellationTokenSource? _cts;
@@ -38,6 +47,7 @@
     {
         if (firstRender)
         {
+            _refreshDelaySeconds = Configuration.GetValue<int>("SyncSettings:StoreStatusRefreshDelaySeconds", 3);
             await FetchStoreStatusAsync();
 
             // Configurar actualización automática cada 10 minutos
@@ -97,6 +107,7 @@
 
         if (result != null && !result.Canceled)
         {
+            await Task.Delay(TimeSpan.FromSeconds(_refreshDelaySeconds));
             await FetchStoreStatusAsync();
         }
     }
@@ -128,13 +139,25 @@
 
     private string FormatSlotEnd(string dateStr)
     {
-        if (DateTime.TryParse(dateStr, out var dt))
+        if (DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
         {
-            return dt.ToLocalTime().ToString("HH:mm");
+            // Lee la configuración (por defecto true si no existe para mantener UTC como venías viendo)
+            bool displayAsUtc = Configuration.GetValue<bool>("SyncSettings:DisplayStoreTimeAsUtc", true);
+
+            if (displayAsUtc)
+            {
+                // Muestra la hora UTC literal (ej: 03:00)
+                return dt.ToString("HH:mm");
+            }
+            else
+            {
+                // Convierte a la hora local de la máquina (ej: 00:00)
+                return dt.ToLocalTime().ToString("HH:mm");
+            }
         }
         return dateStr;
     }
-
+    
     public void Dispose()
     {
         _cts?.Cancel();
