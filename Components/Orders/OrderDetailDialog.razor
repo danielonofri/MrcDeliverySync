@@ -70,14 +70,12 @@
 
     <DialogActions>
         @* CANCELAR a la izquierda (visible en RECEIVED, ACCEPTED e INTEGRATED) *@
-        @* @if (OrderSummary.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase) ||
-             OrderSummary.Status.Equals("ACCEPTED", StringComparison.OrdinalIgnoreCase) ||
-             OrderSummary.Status.Equals("INTEGRATED", StringComparison.OrdinalIgnoreCase))
+        @if (OrderSummary.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase))
         {
             <MudButton Color="Color.Error" Variant="Variant.Outlined" OnClick="@(() => UpdateStatus("REJECTED"))">
-                CANCELAR
+                RECHAZAR
             </MudButton>
-        } *@
+        }
 
         <MudSpacer />
 
