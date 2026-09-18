@@ -16,19 +16,7 @@
         <MudText Typo="Typo.h6" Class="ml-2">Mrc Delivery Sync.</MudText>
 
         <MudSpacer />
-        @if (_userRole == 1)
-        {
-            <MudTooltip Text="Restablecer Configuración / Owner API Key">
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Surface"
-                           Size="Size.Small"
-                           Class="mr-3"
-                           StartIcon="@Icons.Material.Filled.Settings"
-                           OnClick="OpenResetConfigDialog">
-                    Reset Config
-                </MudButton>
-            </MudTooltip>
-        }
+
         @* --- BADGE DE USUARIO / ESTADO DE SESIÓN --- *@
         <div class="d-flex align-center gap-2 mr-3">
             @* Versión de la app *@
@@ -202,11 +190,7 @@
         2 => Color.Warning,
         _ => Color.Info
     };
-    private async Task OpenResetConfigDialog()
-    {
-        await VaultService.SaveOwnerApiKeyAsync(string.Empty);
 
-    }
     private async Task Logout()
     {
         // Si era Admin (Rol 1), elimina la OwnerApiKey al cerrar sesión

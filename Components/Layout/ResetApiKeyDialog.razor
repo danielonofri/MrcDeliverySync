@@ -1,0 +1,32 @@
+﻿@using MrcDeliverySync.Services
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Configurar Owner API Key</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" 
+                      @bind-Value="_apiKey" 
+                      Label="Nueva Owner API Key" 
+                      Variant="Variant.Outlined" 
+                      InputType="InputType.Password" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] 
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string _apiKey = string.Empty;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Save()
+    {
+        MudDialog.Close(DialogResult.Ok(_apiKey));
+    }
+}
