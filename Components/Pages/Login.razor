@@ -73,6 +73,11 @@
                 }
             }
         </MudCardContent>
+        <MudDivider Class="my-4" />
+        <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                 FullWidth="true" OnClick="ResetVault">
+            🔄 Limpiar Vault Completo
+        </MudButton>
     </MudCard>
 </div>
 
@@ -148,15 +153,7 @@
         {
             await VaultService.SaveAuthTokenAsync(result.Token, result.Rol, _licencia);
 
-            // --- REGLA ADMIN (ROL 1) ---
-            // Si el usuario es Admin (Rol 1), eliminamos la OwnerApiKey del Vault
-            // para que la próxima vez que se requiera acceso pida reconfiguración.
-            if (result.Rol == 1 || result.Rol == 2)
-            {
-                // Sobrescribe la clave con nulo/vacío para que el login vuelva a pedirla
-                await VaultService.SaveOwnerApiKeyAsync(string.Empty);
-            }
-
+            
             Snackbar.Add("Autenticación exitosa.", Severity.Success);
             NavManager.NavigateTo("", forceLoad: true);
         }
@@ -164,5 +161,13 @@
         {
             Snackbar.Add("Credenciales inválidas.", Severity.Error);
         }
+    }
+
+    private async Task ResetVault()
+    {
+        await VaultService.ClearSessionAsync();
+        _storedApiKey = null;
+        _isResetMode = false;
+        StateHasChanged();
     }
 }

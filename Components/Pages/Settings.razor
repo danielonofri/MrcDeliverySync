@@ -1,0 +1,62 @@
+﻿@page "/settings"
+@using MrcDeliverySync.Services
+@inject IAuthVaultService VaultService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="pa-4">
+    <MudCard Elevation="2">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Configuración</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+
+        <MudCardContent>
+            @if (_userRole == 1)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mb-3">OwnerApiKey</MudText>
+                <MudTextField @bind-Value="_apiKey" Label="Ingrese OwnerApiKey" 
+                              Variant="Variant.Outlined" InputType="InputType.Password" 
+                              Class="mb-3" FullWidth="true" />
+                
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                           FullWidth="true" OnClick="SaveApiKey">
+                    Guardar ApiKey
+                </MudButton>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info">
+                    No tienes permisos para acceder a esta configuración.
+                </MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private string _apiKey = string.Empty;
+    private int _userRole = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userRole = await VaultService.GetUserRoleAsync();
+        if (_userRole != 1)
+        {
+            NavManager.NavigateTo("/");
+        }
+    }
+
+    private async Task SaveApiKey()
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            Snackbar.Add("Ingrese una ApiKey válida.", Severity.Warning);
+            return;
+        }
+
+        await VaultService.SaveOwnerApiKeyAsync(_apiKey);
+        Snackbar.Add("ApiKey guardada.", Severity.Success);
+    }
+}
