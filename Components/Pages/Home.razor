@@ -13,6 +13,9 @@
 @inject IConfiguration Configuration
 @inject ILogger<Login> Logger
 @inject AppSettingsState AppState
+@inject NavigationManager NavigationManager
+@inject AppSettingsState AppState
+
 <PageTitle>Dashboard - MrcDelivery Sync</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
@@ -136,6 +139,7 @@
     $"PWA Host: {AppState.PwaHost} || API Host: {AppState.ApiHost} || Sql: {AppState.SqlServer}";
     protected override async Task OnInitializedAsync()
     {
+        AppState.SetPwaUrl(NavigationManager.BaseUri);
         // Leer intervalo desde configuración o usar 30s por defecto
         _intervalSeconds = Configuration.GetValue<int>("SyncSettings:CheckIntervalSeconds", 30);
         _criticalDelayThresholdMinutes = Configuration.GetValue<int>(key: "SyncSettings:WarningThresholdMinutes", 20);
