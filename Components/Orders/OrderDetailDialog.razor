@@ -69,6 +69,9 @@
     </DialogContent>
 
     <DialogActions>
+        <MudButton Color="Color.Error" Variant="Variant.Outlined" OnClick="@(() => UpdateStatus("DESACTIVAR_CANCELADA"))">
+            CANCELADO EN OPERADOR
+        </MudButton>
         @* CANCELAR a la izquierda (visible en RECEIVED, ACCEPTED e INTEGRATED) *@
         @if (OrderSummary.Status.Equals("RECEIVED", StringComparison.OrdinalIgnoreCase))
         {
@@ -185,7 +188,11 @@
                 success = await OrderRepository.MarkAsPreparedAsync(orderCode);
                 break;
            case "FORCEDELIVERED":
-                success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Code, status, OrderSummary.Operator, true);
+                success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Code, status, OrderSummary.Operator);
+                break;
+           case "DESACTIVAR_CANCELADA":
+            // Aquí puedes invocar directamente a tu endpoint o a un método del repositorio que ejecute la misma lógica
+                success = await OrderRepository.DesactivarOrdenCancelada(orderCode);
                 break;
             default:
                 success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Code, status, OrderSummary.Operator);

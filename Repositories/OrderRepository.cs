@@ -95,19 +95,13 @@ namespace MrcDeliverySync.Repositories
 
             return order;
         }
-        public async Task<bool> UpdateOrderStatusAsync(string orderCode, string newStatus, DeliveryOperator deliveryOperator, bool? Forzar = false)
+        public async Task<bool> UpdateOrderStatusAsync(string orderCode, string newStatus, DeliveryOperator deliveryOperator)
         {
             try
             {
                 // Ruta relativa según la dirección base de appsettings.json
-                if (Force)
-                {
-                    string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false&force=true";
-                }
-                else
-                {
-                    string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false&force=false";
-                }
+
+                string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false";
                 using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 
                 // Adjuntamos el Token Bearer desde IAuthVaultService[cite: 2]
@@ -132,6 +126,38 @@ namespace MrcDeliverySync.Repositories
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"❌ [DELIVERED EXCEPTION] Error al procesar entrega de orden #{orderCode}: {ex.Message}");
+                return false;
+            }
+        }
+        public async Task<bool> DesactivarOrdenCancelada(string orderCode)
+        {
+            try
+            {
+                string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false";
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+
+                // Adjuntamos el Token Bearer desde IAuthVaultService[cite: 2]
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                using var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"❌ [CANCELLED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    return false;
+                }
+
+                _logger.LogInformation($"✅ [CANCELLED OK] Orden #{orderCode} marcada como CANCELLED.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [CANCELLED EXCEPTION] Error al procesar cancelled de orden #{orderCode}: {ex.Message}");
                 return false;
             }
         }

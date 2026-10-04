@@ -14,5 +14,6 @@ namespace MrcDeliverySync.Repositories
         Task<bool> AcceptOrderAsync(string orderCode, int? preparationMinutes = null);
         Task<bool> RejectOrderAsync(string orderCode);
         Task<bool> MarkAsPreparedAsync(string orderCode);
+        Task<bool> DesactivarOrdenCancelada(string orderCode);
     }
 }
