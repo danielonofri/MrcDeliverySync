@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using MrcDeliverySync.Services;
+using MudBlazor.Utilities;
 
 namespace MrcDeliverySync.Repositories
 {
@@ -94,13 +95,19 @@ namespace MrcDeliverySync.Repositories
 
             return order;
         }
-        public async Task<bool> UpdateOrderStatusAsync(string orderCode, string newStatus, DeliveryOperator deliveryOperator)
+        public async Task<bool> UpdateOrderStatusAsync(string orderCode, string newStatus, DeliveryOperator deliveryOperator, bool? Forzar = false)
         {
             try
             {
                 // Ruta relativa según la dirección base de appsettings.json
-                string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false";
-
+                if (Force)
+                {
+                    string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false&force=true";
+                }
+                else
+                {
+                    string endpoint = $"api/v1/pos-order-bridge/order/delivered/{orderCode}?useQueue=false&force=false";
+                }
                 using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 
                 // Adjuntamos el Token Bearer desde IAuthVaultService[cite: 2]

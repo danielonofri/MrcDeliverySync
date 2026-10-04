@@ -99,6 +99,11 @@
             <MudButton Color="Color.Info" Variant="Variant.Filled" OnClick="@(() => UpdateStatus("DELIVERED"))">
                 ENTREGADO
             </MudButton>
+        } else
+        {
+            <MudButton Color="Color.Info" Variant="Variant.Filled" OnClick="@(() => UpdateStatus("FORCEDELIVERED"))">
+                FINALIZAR
+            </MudButton>
         }
 
         @* BOTÓN CERRAR a la derecha *@
@@ -178,6 +183,9 @@
                 break;
             case "PREPARED":
                 success = await OrderRepository.MarkAsPreparedAsync(orderCode);
+                break;
+           case "FORCEDELIVERED":
+                success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Code, status, OrderSummary.Operator, true);
                 break;
             default:
                 success = await OrderRepository.UpdateOrderStatusAsync(OrderSummary.Code, status, OrderSummary.Operator);
