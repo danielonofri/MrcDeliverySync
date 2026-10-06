@@ -26,6 +26,7 @@ builder.Services.AddMudServices();
 //builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IAudioService, AudioService>();
 builder.Services.AddScoped<IAuthVaultService, AuthVaultService>();
+
 // Registrar servicio de estado global de configuración
 builder.Services.AddSingleton<AppSettingsState>(sp =>
 {
@@ -91,7 +92,28 @@ builder.Services.AddHttpClient<IStoreRepository, StoreRepository>((serviceProvid
     client.BaseAddress = new Uri(baseUrl);
     client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
 });
+builder.Services.AddHttpClient<IProductoPeyaRepository, ProductoPeyaRepository>((serviceProvider, client) =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 
+    var rawUrl = configuration["ApiSettings:AuthApiBaseUrl"];
+    var baseUrl = !string.IsNullOrWhiteSpace(rawUrl) ? rawUrl : "https://localhost:7046/";
+
+    if (!baseUrl.EndsWith("/"))
+    {
+        baseUrl += "/";
+    }
+
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("X-Tunnel-Skip-Anti-Abuse-Page", "true");
+
+    string pwaHostname = Environment.MachineName;
+    string apiHost = client.BaseAddress.Host;
+
+    logger.LogInformation("[CONFIG-CHECK] PWA Hostname: {PwaHostname} | API Host: {ApiHost} | Base URL: {BaseUrl}",
+        pwaHostname, apiHost, client.BaseAddress);
+});
 // Registrar servicios de almacenamiento protegido para la PWA
 var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
 var keysFolder = Path.Combine(commonData, "MrcDeliverySyncKeys");

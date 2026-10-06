@@ -15,6 +15,7 @@
 @inject AppSettingsState AppState
 @inject NavigationManager NavigationManager
 @inject AppSettingsState AppState
+@inject IProductoPeyaRepository ProductoPeyaRepository
 
 <PageTitle>Dashboard - MrcDelivery Sync</PageTitle>
 
@@ -117,10 +118,67 @@
         <MudTabPanel Text="Operador 2" Icon="@Icons.Material.Filled.Fastfood">
             @RenderOrdersList(_orders.Where(o => o.Operator == DeliveryOperator.UberEats))
         </MudTabPanel>
+
+        @* --- PESTAÑA DIRECTA DE ARTÍCULOS PEYA --- *@
+        <MudTabPanel Text="Gestión Productos PEYA" Icon="@Icons.Material.Filled.Inventory">
+            <MudContainer Class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Catálogo de Artículos PEYA</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadArticulosPeyaAsync">
+                        Actualizar Lista
+                    </MudButton>
+                </div>
+
+                @if (_isLoadingArticulos)
+                {
+                    <div class="d-flex justify-center pa-4 my-4">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    </div>
+                }
+                else if (_articulosPeya == null || !_articulosPeya.Any())
+                {
+                    <MudAlert Severity="Severity.Normal" Class="my-2">No se encontraron artículos que comiencen con PEYA.</MudAlert>
+                }
+                else
+                {
+                    <MudTable Items="_articulosPeya" Hover="true" Striped="true" Dense="true" Elevation="2">
+                        <HeaderContent>
+                            <MudTh>Código</MudTh>
+                            <MudTh>Descripción</MudTh>
+                            <MudTh>Código remoto</MudTh>
+                            <MudTh>Sin Stock</MudTh>
+                            <MudTh Style="text-align:right;">Acción</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Código">@context.Codigo</MudTd>
+                            <MudTd DataLabel="Descripción">@context.Descrip</MudTd>
+                            <MudTd DataLabel="Código remoto">@context.Codigoerp</MudTd>
+                            <MudTd DataLabel="Sin Stock">
+                                <MudChip T="string" Color="@(context.Sinstock == true ? Color.Error : Color.Success)" Size="Size.Small">
+                                    @(context.Sinstock == true ? "Sí" : "No")
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Acción" Style="text-align:right;">
+                                <MudButton Variant="Variant.Filled" 
+                                           Color="Color.Secondary" 
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.ToggleOn"
+                                           OnClick="@(() => ToggleDisponibilidadAsync(context))">
+                                    Conmutar Estado
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudContainer>
+        </MudTabPanel>
     </MudTabs>
 </MudContainer>
 
 @code {
+    private List<ArticuloPeyaDto> _articulosPeya = new();
+    private bool _isLoadingArticulos = false;
+
     private System.Threading.Timer? _syncTimer;
     private int _criticalDelayThresholdMinutes = 15;
     private int _intervalSeconds = 30;
@@ -145,6 +203,8 @@
         _criticalDelayThresholdMinutes = Configuration.GetValue<int>(key: "SyncSettings:WarningThresholdMinutes", 20);
         _ApiHost = Configuration.GetValue<string>("ApiSettings:AuthApiBaseUrl", "Host desconocido");
         await LoadOrdersDataOnlyAsync();
+
+        await LoadArticulosPeyaAsync();
 
         // Iniciar el temporizador recurrente
         _syncTimer = new System.Threading.Timer(async _ =>
@@ -356,5 +416,49 @@
         _syncTimer?.Dispose();
         _dotNetRef?.Dispose();
         await ValueTask.CompletedTask;
+    }
+    //----------------------------------------------
+    private async Task LoadArticulosPeyaAsync()
+    {
+        _isLoadingArticulos = true;
+        StateHasChanged();
+        try
+        {
+            var resultado = await ProductoPeyaRepository.GetArticulosPeyaAsync();
+            _articulosPeya = resultado?.ToList() ?? new List<ArticuloPeyaDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar artículos PEYA: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoadingArticulos = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleDisponibilidadAsync(ArticuloPeyaDto articulo)
+    {
+        try
+        {
+            bool nuevoEstado = !(articulo.Sinstock ?? false);
+            
+            bool exito = await ProductoPeyaRepository.UpdateItemAvailabilityAsync(articulo.Codigo, nuevoEstado);
+
+            if (exito)
+            {
+                Snackbar.Add($"Disponibilidad actualizada para {articulo.Codigo}", Severity.Success);
+                await LoadArticulosPeyaAsync();
+            }
+            else
+            {
+                Snackbar.Add("No se pudo actualizar la disponibilidad en la plataforma.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Excepción al conmutar disponibilidad: {ex.Message}", Severity.Error);
+        }
     }
 }
