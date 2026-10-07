@@ -100,5 +100,37 @@ namespace MrcDeliverySync.Repositories
                 return false;
             }
         }
+
+        public async Task<(IEnumerable<ArticuloPeyaDto> Items, int TotalCount)> GetArticulosPeyaPagedAsync(string searchTerm, string stockFilter, int pageNumber, int pageSize)
+        {
+            try
+            {
+                string endpoint = $"api/v1/pos-order-bridge/articulos/peya/paged?searchTerm={Uri.EscapeDataString(searchTerm ?? "")}&stockFilter={stockFilter}&pageNumber={pageNumber}&pageSize={pageSize}";
+
+                using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+
+                var token = await _vaultService.GetAuthTokenAsync();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                using var response = await _http.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"❌ [GET PEYA PAGED FAIL] Status: {response.StatusCode}");
+                    return (Enumerable.Empty<ArticuloPeyaDto>(), 0);
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<PagedResultDto<ArticuloPeyaDto>>();
+                return (result?.Items ?? Enumerable.Empty<ArticuloPeyaDto>(), result?.TotalCount ?? 0);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ [GET PEYA PAGED EXCEPTION]: {ex.Message}");
+                return (Enumerable.Empty<ArticuloPeyaDto>(), 0);
+            }
+        }
     }
 }

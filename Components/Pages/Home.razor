@@ -117,16 +117,22 @@
         </MudTabPanel>
 
         @* --- PESTAÑA DE GESTIÓN DE PRODUCTOS --- *@
-        @* --- PESTAÑA DE GESTIÓN DE PRODUCTOS --- *@
         <MudTabPanel Text="Gestión de productos" Icon="@Icons.Material.Filled.Inventory">
-            <div class="d-flex flex-column" style="height: calc(100vh - 320px); overflow: hidden;">
-                <div class="d-flex justify-space-between align-center mb-2 flex-wrap gap-2 px-1">
+            <div class="d-flex flex-column" style="height: calc(100vh - 260px); overflow: hidden;">
+                <div class="d-flex justify-space-between align-center flex-wrap gap-2 mb-2 px-1">
                     <MudText Typo="Typo.subtitle1"><b>Catálogo de Artículos</b></MudText>
 
-                    <div class="d-flex align-center gap-2" style="flex-grow: 1; max-width: 450px;">
-                        @* --- BUSCADOR RÁPIDO UNIFICADO --- *@
+                    <div class="d-flex align-center gap-2 flex-wrap justify-end" style="flex-grow: 1;">
+                        @* --- TOGGLE GROUP PARA FILTRAR STOCK (Corregido sin conflictos) --- *@
+                        <MudToggleGroup T="string" @bind-Value="_stockFilter" @bind-Value:after="OnStockFilterChanged" Color="Color.Primary" Size="Size.Small" Dense="true" Style="height: 32px;">
+                            <MudToggleItem Value="@("all")">Todos</MudToggleItem>
+                            <MudToggleItem Value="@("available")">Disponibles</MudToggleItem>
+                            <MudToggleItem Value="@("nostock")">Sin Stock</MudToggleItem>
+                        </MudToggleGroup>
+
                         <MudTextField @bind-Value="_searchString"
-                                      Placeholder="Filtrar por código, descripción o remoto..."
+                                      @bind-Value:after="OnSearchChanged"
+                                      Placeholder="Filtrar por código o descripción..."
                                       Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Filled.Search"
                                       IconSize="Size.Small"
@@ -134,65 +140,113 @@
                                       Variant="Variant.Outlined"
                                       Class="mt-0"
                                       Clearable="true"
-                                      Immediate="true" />
+                                      Immediate="true"
+                                      Style="max-width: 260px; min-width: 200px; height: 32px;" />
 
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadArticulosPeyaAsync">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Style="height: 32px;" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadArticulosPeyaAsync">
                             Actualizar
                         </MudButton>
+
+                        @* --- SWITCH PARA CAMBIAR EL MODO DE PAGINACIÓN LOCALMENTE --- *@
+                        <MudTooltip Text="Alternar entre Paginación Remota (API) y Carga Local (Memoria)">
+                            <MudSwitch T="bool" Value="_useServerPagination" ValueChanged="TogglePaginationModeAsync"
+                                       Color="Color.Info" Dense="true" Class="ml-2 mr-1">
+                                <span style="font-size: 0.8rem; color: var(--mud-palette-text-secondary);">
+                                    @(_useServerPagination ? "Servidor" : "Local")
+                                </span>
+                            </MudSwitch>
+                        </MudTooltip>
                     </div>
                 </div>
 
-                @if (_isLoadingArticulos)
+                @if (_isLoadingArticulos && !_useServerPagination)
                 {
                     <div class="d-flex justify-center pa-4 my-2">
                         <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
                     </div>
                 }
-                else if (_articulosPeya == null || !_articulosPeya.Any())
+                else if (!_useServerPagination && (_articulosPeya == null || !_articulosPeya.Any()))
                 {
                     <MudAlert Severity="Severity.Normal" Dense="true" Class="my-1">No se encontraron artículos.</MudAlert>
                 }
                 else
                 {
                     <div style="flex-grow: 1; overflow-y: auto;">
-                        <MudTable Items="FilteredArticulos" Hover="true" Striped="true" Dense="true" Elevation="1" FixedHeader="true" Breakpoint="Breakpoint.None" SortLabel="Ordenar por">
-                            <HeaderContent>
-
-                                <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigo ?? string.Empty)">Código</MudTableSortLabel></MudTh>
-                                <MudTh Style="padding: 6px 12px;"><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<ArticuloPeyaDto, object>(x => x.Descrip ?? string.Empty)">Descripción</MudTableSortLabel></MudTh>
-                                <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigoerp ?? string.Empty)">Código remoto</MudTableSortLabel></MudTh>
-                                <MudTh Style="padding: 6px 12px; text-align:center;">Disponibilidad (Sin Stock)</MudTh>
-                            </HeaderContent>
-                            <RowTemplate>
-                                <MudTd DataLabel="Código" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigo</MudTd>
-                                <MudTd DataLabel="Descripción" Style="padding: 4px 12px;">@context.Descrip</MudTd>
-                                <MudTd DataLabel="Código remoto" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigoerp</MudTd>
-                                <MudTd DataLabel="Sin Stock" Style="padding: 4px 12px; text-align:center;">
-                                    <MudButton Variant="Variant.Filled"
-                                               Color="@(context.Sinstock == true ? Color.Error : Color.Success)"
-                                               Size="Size.Small"
-                                               Style="padding: 2px 10px; min-width: 110px;"
-                                               StartIcon="@(context.Sinstock == true ? Icons.Material.Filled.Close : Icons.Material.Filled.Check)"
-                                               OnClick="@(() => ToggleDisponibilidadAsync(context))">
-                                        @(context.Sinstock == true ? "Sin Stock" : "Disponible")
-                                    </MudButton>
-                                </MudTd>
-                            </RowTemplate>
-                            <PagerContent>
-                                <MudTablePager PageSizeOptions="new int[] { 15, 30, 50, 100 }" />
-                            </PagerContent>
-                        </MudTable>
+                        @if (_useServerPagination)
+                        {
+                            <MudTable ServerData="LoadServerData" Hover="true" Striped="true" Dense="true" Elevation="1" FixedHeader="true" Breakpoint="Breakpoint.None" SortLabel="Ordenar por" @ref="_table">
+                                <HeaderContent>
+                                    <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigo ?? string.Empty)">Código</MudTableSortLabel></MudTh>
+                                    <MudTh Style="padding: 6px 12px;"><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<ArticuloPeyaDto, object>(x => x.Descrip ?? string.Empty)">Descripción</MudTableSortLabel></MudTh>
+                                    <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigoerp ?? string.Empty)">Código remoto</MudTableSortLabel></MudTh>
+                                    <MudTh Style="padding: 6px 12px; text-align:center;">Disponibilidad</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Código" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigo</MudTd>
+                                    <MudTd DataLabel="Descripción" Style="padding: 4px 12px;">@context.Descrip</MudTd>
+                                    <MudTd DataLabel="Código remoto" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigoerp</MudTd>
+                                    <MudTd DataLabel="Disponibilidad" Style="padding: 4px 12px; text-align:center;">
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="@(context.Sinstock == true ? Color.Error : Color.Success)"
+                                                   Size="Size.Small"
+                                                   Style="padding: 2px 10px; min-width: 110px;"
+                                                   StartIcon="@(context.Sinstock == true ? Icons.Material.Filled.Close : Icons.Material.Filled.Check)"
+                                                   OnClick="@(() => ToggleDisponibilidadAsync(context))">
+                                            @(context.Sinstock == true ? "Sin Stock" : "Disponible")
+                                        </MudButton>
+                                    </MudTd>
+                                </RowTemplate>
+                                <PagerContent>
+                                    <MudTablePager PageSizeOptions="new int[] { 15, 30, 50, 100 }" />
+                                </PagerContent>
+                            </MudTable>
+                        }
+                        else
+                        {
+                            <MudTable Items="FilteredArticulos" Hover="true" Striped="true" Dense="true" Elevation="1" FixedHeader="true" Breakpoint="Breakpoint.None" SortLabel="Ordenar por">
+                                <HeaderContent>
+                                    <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigo ?? string.Empty)">Código</MudTableSortLabel></MudTh>
+                                    <MudTh Style="padding: 6px 12px;"><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<ArticuloPeyaDto, object>(x => x.Descrip ?? string.Empty)">Descripción</MudTableSortLabel></MudTh>
+                                    <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigoerp ?? string.Empty)">Código remoto</MudTableSortLabel></MudTh>
+                                    <MudTh Style="padding: 6px 12px; text-align:center;">Disponibilidad</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Código" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigo</MudTd>
+                                    <MudTd DataLabel="Descripción" Style="padding: 4px 12px;">@context.Descrip</MudTd>
+                                    <MudTd DataLabel="Código remoto" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigoerp</MudTd>
+                                    <MudTd DataLabel="Disponibilidad" Style="padding: 4px 12px; text-align:center;">
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="@(context.Sinstock == true ? Color.Error : Color.Success)"
+                                                   Size="Size.Small"
+                                                   Style="padding: 2px 10px; min-width: 110px;"
+                                                   StartIcon="@(context.Sinstock == true ? Icons.Material.Filled.Close : Icons.Material.Filled.Check)"
+                                                   OnClick="@(() => ToggleDisponibilidadAsync(context))">
+                                            @(context.Sinstock == true ? "Sin Stock" : "Disponible")
+                                        </MudButton>
+                                    </MudTd>
+                                </RowTemplate>
+                                <PagerContent>
+                                    <MudTablePager PageSizeOptions="new int[] { 15, 30, 50, 100 }" />
+                                </PagerContent>
+                            </MudTable>
+                        }
                     </div>
                 }
             </div>
         </MudTabPanel>
+
     </MudTabs>
 </MudContainer>
 
 @code {
+    private bool _useServerPagination = false; // Por defecto modo local (como ahora)
+    private MudTable<ArticuloPeyaDto>? _table;
+    private CancellationTokenSource? _searchCts;
+
     private List<ArticuloPeyaDto> _articulosPeya = new();
     private bool _isLoadingArticulos = false;
     private string _searchString = string.Empty;
+    private string _stockFilter = "all"; // "all", "available", "nostock"
 
     private System.Threading.Timer? _syncTimer;
     private int _criticalDelayThresholdMinutes = 15;
@@ -217,9 +271,23 @@
         _intervalSeconds = Configuration.GetValue<int>("SyncSettings:CheckIntervalSeconds", 30);
         _criticalDelayThresholdMinutes = Configuration.GetValue<int>(key: "SyncSettings:WarningThresholdMinutes", 20);
         _ApiHost = Configuration.GetValue<string>("ApiSettings:AuthApiBaseUrl", "Host desconocido");
+
+        // Recuperar preferencia local del usuario para la paginación (si existe)
+        try
+        {
+            var savedPref = await JS.InvokeAsync<string>("localStorage.getItem", "mrc_use_server_pagination");
+            if (bool.TryParse(savedPref, out bool result))
+            {
+                _useServerPagination = result;
+            }
+        }
+        catch
+        {
+
+        }
         await LoadOrdersDataOnlyAsync();
 
-        await LoadArticulosPeyaAsync();
+        await ReloadArticulosAsync();
 
         _syncTimer = new System.Threading.Timer(async _ =>
         {
@@ -425,6 +493,11 @@
 
     private async Task LoadArticulosPeyaAsync()
     {
+        if (_useServerPagination)
+        {
+            await ReloadArticulosAsync(); // Esto fuerza a la tabla a recargar los datos del servidor
+            return;
+        }
         _isLoadingArticulos = true;
         StateHasChanged();
         try
@@ -453,7 +526,7 @@
             if (exito)
             {
                 Snackbar.Add($"Disponibilidad actualizada para {articulo.Codigo}", Severity.Success);
-                await LoadArticulosPeyaAsync();
+                await ReloadArticulosAsync();
             }
             else
             {
@@ -466,13 +539,125 @@
         }
     }
 
+    private async Task TogglePaginationModeAsync(bool newValue)
+    {
+        _useServerPagination = newValue;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "mrc_use_server_pagination", newValue.ToString());
+        }
+        catch { }
+
+        Snackbar.Add($"Cambiado a {(_useServerPagination ? "Modo Servidor (Paginado)" : "Modo Local (Completo)")}", Severity.Info);
+        await ReloadArticulosAsync();
+    }
+
+    private async Task ReloadArticulosAsync()
+    {
+        if (_useServerPagination)
+        {
+            if (_table != null)
+            {
+                await _table.ReloadServerData();
+            }
+        }
+        else
+        {
+            await LoadArticulosPeyaAsync();
+        }
+    }
+
+    private async Task OnSearchChanged()
+    {
+        if (!_useServerPagination) return;
+
+        // Cancelamos cualquier búsqueda pendiente anterior
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+
+        try
+        {
+            // Esperamos 400 milisegundos a que el usuario deje de tipear
+            await Task.Delay(400, _searchCts.Token);
+
+            if (_table != null)
+            {
+                await _table.ReloadServerData();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // El usuario siguió escribiendo antes de los 400ms, ignoramos esta petición
+        }
+    }
+
+    private async Task OnStockFilterChanged(string value)
+    {
+        _stockFilter = value;
+        if (_useServerPagination && _table != null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task<TableData<ArticuloPeyaDto>> LoadServerData(TableState state, CancellationToken token)
+    {
+        if (!_useServerPagination)
+            return new TableData<ArticuloPeyaDto> { Items = FilteredArticulos, TotalItems = FilteredArticulos.Count() };
+
+        _isLoadingArticulos = true;
+        StateHasChanged();
+        try
+        {
+            int pageNumber = state.Page + 1;
+            int pageSize = state.PageSize;
+
+            var resultado = await ProductoPeyaRepository.GetArticulosPeyaPagedAsync(_searchString, _stockFilter, pageNumber, pageSize);
+
+            return new TableData<ArticuloPeyaDto>()
+            {
+                Items = resultado.Items,
+                TotalItems = resultado.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar datos paginados: {ex.Message}", Severity.Error);
+            return new TableData<ArticuloPeyaDto> { Items = Enumerable.Empty<ArticuloPeyaDto>(), TotalItems = 0 };
+        }
+        finally
+        {
+            _isLoadingArticulos = false;
+            StateHasChanged();
+        }
+    }
+    private async Task OnStockFilterChanged()
+    {
+        if (_useServerPagination && _table != null)
+        {
+            await _table.ReloadServerData();
+        }
+        // Si es modo local, no hace falta hacer nada porque @bind-Value
+        // actualiza _stockFilter y la propiedad computada FilteredArticulos se encarga del resto al instante.
+    }
     // Filtro avanzado que abarca Código, Descripción y Código remoto (Codigoerp)
     private IEnumerable<ArticuloPeyaDto> FilteredArticulos =>
-        string.IsNullOrWhiteSpace(_searchString)
-            ? _articulosPeya
-            : _articulosPeya.Where(x =>
-                (!string.IsNullOrEmpty(x.Codigo) && x.Codigo.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(x.Descrip) && x.Descrip.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(x.Codigoerp) && x.Codigoerp.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
-            );
+    _articulosPeya.Where(x =>
+    {
+        // Filtro por texto (Código, Descripción o Código remoto)
+        bool matchesSearch = string.IsNullOrWhiteSpace(_searchString) ||
+            (!string.IsNullOrEmpty(x.Codigo) && x.Codigo.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrEmpty(x.Descrip) && x.Descrip.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrEmpty(x.Codigoerp) && x.Codigoerp.Contains(_searchString, StringComparison.OrdinalIgnoreCase));
+
+        // Filtro por Estado de Stock
+        bool matchesStock = _stockFilter switch
+        {
+            "available" => !(x.Sinstock ?? false),
+            "nostock" => (x.Sinstock ?? false),
+            _ => true // "all"
+        };
+
+        return matchesSearch && matchesStock;
+    });
 }
