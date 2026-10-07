@@ -70,9 +70,7 @@
                             </MudTooltip>
                         }
                     }
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                        Gestión unificada | Atajos: <b>[A]</b> Aceptar | <b>[R]</b> Preparar | <b>[E]</b> Entregado
-                    </MudText>
+                    
                 </div>
 
                 <div class="d-flex align-center gap-3">
@@ -121,6 +119,75 @@
 
         @* --- PESTAÑA DIRECTA DE ARTÍCULOS PEYA --- *@
         <MudTabPanel Text="Gestión Productos PEYA" Icon="@Icons.Material.Filled.Inventory">
+            <MudContainer Class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-2">
+                    <MudText Typo="Typo.h6">Catálogo de Artículos PEYA</MudText>
+
+                    <div class="d-flex align-center gap-2">
+                        @* --- BUSCADOR RÁPIDO --- *@
+                        <MudTextField @bind-Value="_searchString"
+                                      Placeholder="Filtrar por código o descripción..."
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      IconSize="Size.Medium"
+                                      Class="mt-0"
+                                      Clearable="true"
+                                      Immediate="true" />
+
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadArticulosPeyaAsync">
+                            Actualizar
+                        </MudButton>
+                    </div>
+                </div>
+
+                @if (_isLoadingArticulos)
+                {
+                    <div class="d-flex justify-center pa-4 my-4">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    </div>
+                }
+                else if (_articulosPeya == null || !_articulosPeya.Any())
+                {
+                    <MudAlert Severity="Severity.Normal" Class="my-2">No se encontraron artículos que comiencen con PEYA.</MudAlert>
+                }
+                else
+                {
+                    @* Usamos una propiedad computada o filtrada para la tabla *@
+                    <MudTable Items="FilteredArticulos" Hover="true" Striped="true" Dense="true" Elevation="2" SortLabel="Ordenar por">
+                        <HeaderContent>
+                            <MudTh><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigo)">Código</MudTableSortLabel></MudTh>
+                            <MudTh><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<ArticuloPeyaDto, object>(x => x.Descrip)">Descripción</MudTableSortLabel></MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigoerp ?? string.Empty)">Código remoto</MudTableSortLabel></MudTh>
+                            <MudTh>Sin Stock</MudTh>
+                            <MudTh Style="text-align:right;">Acción</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Código">@context.Codigo</MudTd>
+                            <MudTd DataLabel="Descripción">@context.Descrip</MudTd>
+                            <MudTd DataLabel="Código de Barras 4">@context.Codigoerp</MudTd>
+                            <MudTd DataLabel="Sin Stock">
+                                <MudChip T="string" Color="@(context.Sinstock == true ? Color.Error : Color.Success)" Size="Size.Small">
+                                    @(context.Sinstock == true ? "Sí" : "No")
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Acción" Style="text-align:right;">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Secondary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.ToggleOn"
+                                           OnClick="@(() => ToggleDisponibilidadAsync(context))">
+                                    Conmutar Estado
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                }
+            </MudContainer>
+        </MudTabPanel>
+        @* <MudTabPanel Text="Gestión Productos PEYA" Icon="@Icons.Material.Filled.Inventory">
             <MudContainer Class="pa-4">
                 <div class="d-flex justify-space-between align-center mb-3">
                     <MudText Typo="Typo.h6">Catálogo de Artículos PEYA</MudText>
@@ -171,13 +238,14 @@
                     </MudTable>
                 }
             </MudContainer>
-        </MudTabPanel>
+        </MudTabPanel> *@
     </MudTabs>
 </MudContainer>
 
 @code {
     private List<ArticuloPeyaDto> _articulosPeya = new();
     private bool _isLoadingArticulos = false;
+    private string _searchString = string.Empty;
 
     private System.Threading.Timer? _syncTimer;
     private int _criticalDelayThresholdMinutes = 15;
@@ -461,4 +529,15 @@
             Snackbar.Add($"Excepción al conmutar disponibilidad: {ex.Message}", Severity.Error);
         }
     }
+
+
+    // Propiedad calculada que filtra la lista en base al texto escrito
+    private IEnumerable<ArticuloPeyaDto> FilteredArticulos =>
+        string.IsNullOrWhiteSpace(_searchString)
+            ? _articulosPeya
+            : _articulosPeya.Where(x =>
+                (!string.IsNullOrEmpty(x.Codigo) && x.Codigo.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(x.Descrip) && x.Descrip.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(x.Codigoerp) && x.Codigoerp.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            );
 }
