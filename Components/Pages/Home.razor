@@ -155,17 +155,18 @@
                 else
                 {
                     <div style="flex-grow: 1; overflow-y: auto;">
-                        <MudTable Items="FilteredArticulos" Hover="true" Striped="true" Dense="true" Elevation="1" FixedHeader="true" SortLabel="Ordenar por">
+                        <MudTable Items="FilteredArticulos" Hover="true" Striped="true" Dense="true" Elevation="1" FixedHeader="true" Breakpoint="Breakpoint.None" SortLabel="Ordenar por">
                             <HeaderContent>
-                                <MudTh Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigo ?? string.Empty)">Código</MudTableSortLabel></MudTh>
+
+                                <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigo ?? string.Empty)">Código</MudTableSortLabel></MudTh>
                                 <MudTh Style="padding: 6px 12px;"><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<ArticuloPeyaDto, object>(x => x.Descrip ?? string.Empty)">Descripción</MudTableSortLabel></MudTh>
-                                <MudTh Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigoerp ?? string.Empty)">Código remoto</MudTableSortLabel></MudTh>
+                                <MudTh Class="d-none d-sm-table-cell" Style="padding: 6px 12px;"><MudTableSortLabel SortBy="new Func<ArticuloPeyaDto, object>(x => x.Codigoerp ?? string.Empty)">Código remoto</MudTableSortLabel></MudTh>
                                 <MudTh Style="padding: 6px 12px; text-align:center;">Disponibilidad (Sin Stock)</MudTh>
                             </HeaderContent>
                             <RowTemplate>
-                                <MudTd DataLabel="Código" Style="padding: 4px 12px;">@context.Codigo</MudTd>
+                                <MudTd DataLabel="Código" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigo</MudTd>
                                 <MudTd DataLabel="Descripción" Style="padding: 4px 12px;">@context.Descrip</MudTd>
-                                <MudTd DataLabel="Código remoto" Style="padding: 4px 12px;">@context.Codigoerp</MudTd>
+                                <MudTd DataLabel="Código remoto" Class="d-none d-sm-table-cell" Style="padding: 4px 12px;">@context.Codigoerp</MudTd>
                                 <MudTd DataLabel="Sin Stock" Style="padding: 4px 12px; text-align:center;">
                                     <MudButton Variant="Variant.Filled"
                                                Color="@(context.Sinstock == true ? Color.Error : Color.Success)"
