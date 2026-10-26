@@ -9,6 +9,8 @@ namespace MrcDeliverySync.Models
         public string Code { get; set; } = string.Empty;
         public string? RemoteId { get; set; }
         public string Status { get; set; } = string.Empty;
+        public decimal SubTotal { get; set; }
+        public decimal Discount { get; set; }
         public decimal TotalAmount { get; set; }
         public string CustomerName { get; set; } = string.Empty;
         public string CustomerPhone { get; set; } = string.Empty;

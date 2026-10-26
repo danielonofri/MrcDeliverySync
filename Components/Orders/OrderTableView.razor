@@ -7,7 +7,7 @@
         <MudTh>Cliente</MudTh>
         <MudTh>Operador</MudTh>
         <MudTh>Estado</MudTh>
-        <MudTh>Total</MudTh>
+        <MudTh>Total / Desglose</MudTh>
         <MudTh>Transcurrido</MudTh>
         <MudTh>Teléfono</MudTh>
         <MudTh>Acciones</MudTh>
@@ -21,7 +21,16 @@
                 @context.Status
             </MudChip>
         </MudTd>
-        <MudTd DataLabel="Total">$@context.TotalAmount.ToString("N2")</MudTd>
+        <MudTd DataLabel="Total">
+            <div class="d-flex flex-column">
+                @if (context.Discount > 0)
+                {
+                    <span style="font-size: 0.75rem; color: gray;">Sub: $@context.SubTotal.ToString("N2")</span>
+                    <span style="font-size: 0.75rem; color: var(--mud-palette-error);">Desc: -$@context.Discount.ToString("N2")</span>
+                }
+                <strong style="color: var(--mud-palette-success);">$@context.TotalAmount.ToString("N2")</strong>
+            </div>
+        </MudTd>
         <MudTd DataLabel="Transcurrido">
             <MudChip T="string" Color="@(context.IsDelayed(15) ? Color.Error : Color.Default)" Size="Size.Small"
                      Icon="@Icons.Material.Filled.AccessTime">
