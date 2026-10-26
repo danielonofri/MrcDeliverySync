@@ -130,6 +130,20 @@ var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
 {
+    // Middleware personalizado para normalizar/tolerar mayúsculas y minúsculas en el PathBase
+    app.Use(async (context, next) =>
+    {
+        var path = context.Request.Path.Value;
+        if (path != null && path.StartsWith("/mrcdeliverysync", StringComparison.OrdinalIgnoreCase))
+        {
+            // Reemplaza el inicio con la capitalización exacta que espera UsePathBase
+            if (!path.StartsWith("/MrcDeliverySync", StringComparison.Ordinal))
+            {
+                context.Request.Path = "/MrcDeliverySync" + path.Substring("/mrcdeliverysync".Length);
+            }
+        }
+        await next();
+    });
     app.UsePathBase("/MrcDeliverySync");
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();

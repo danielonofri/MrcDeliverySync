@@ -12,7 +12,7 @@ namespace MrcDeliverySync.Repositories
         Task<bool> UpdateOrderStatusAsync(string orderCode, string newStatus, DeliveryOperator deliveryOperator);
         Task<IEnumerable<RobotStatusDto>> GetRobotsStatusAsync();
         Task<bool> AcceptOrderAsync(string orderCode, int? preparationMinutes = null);
-        Task<bool> RejectOrderAsync(string orderCode);
+        Task<bool> RejectOrderAsync(string orderCode, string rejectionReason);
         Task<bool> MarkAsPreparedAsync(string orderCode);
         Task<bool> DesactivarOrdenCancelada(string orderCode);
     }

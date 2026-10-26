@@ -309,57 +309,101 @@ namespace MrcDeliverySync.Repositories
             //    return false;
             //}
         }
-        public async Task<bool> RejectOrderAsync(string orderCode)
+
+        public async Task<bool> RejectOrderAsync(string orderCode, string reason)
         {
             try
             {
-                using var request = new HttpRequestMessage(
-                    HttpMethod.Post,
-                    $"api/v1/pos-order-bridge/order/reject/{orderCode}");
+                // Apunta al endpoint de tu bridge que procesa el cambio de estado
+                string endpoint = $"api/v1/pos-order-bridge/order/reject/{orderCode}";
 
-                // Leemos el token de la sesión activa
+                // Estructura exacta del payload requerida para el rechazo
+                var payload = new
+                {
+                    status = "order_rejected",
+                    reason = reason,
+                    message = $"Pedido rechazado por motivo: {reason}"
+                };
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+                request.Content = JsonContent.Create(payload);
+
+                // Adjuntamos el Token Bearer desde IAuthVaultService
                 var token = await _vaultService.GetAuthTokenAsync();
                 if (!string.IsNullOrEmpty(token))
                 {
                     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                    Console.WriteLine("🔑 [AUTH] Token Bearer adjuntado a la petición.");
-                }
-                else
-                {
-                    Console.WriteLine("⚠️ [AUTH WARN] GetAuthTokenAsync() devolvió nulo o vacío.");
                 }
 
-                var response = await _http.SendAsync(request);
+                using var response = await _http.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogDebug($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
-                    Console.WriteLine($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+                    _logger.LogError($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
                     return false;
                 }
 
-                _logger.LogDebug($"✅ [REJECTED OK] Orden #{orderCode} marcada como REJECTED.");
-                // Console.WriteLine($"✅ [PREPARED OK] Orden #{code} marcada como REJECTED.");
+                _logger.LogInformation($"✅ [REJECTED OK] Orden #{orderCode} rechazada correctamente con motivo: {reason}.");
                 return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"❌ [REJECTED EXCEPTION]: {ex.Message}");
-                // Console.WriteLine($"❌ [PREPARED EXCEPTION]: {ex.Message}"); 
                 return false;
             }
-
-            //try
-            //{
-            //    var response = await _http.PostAsync($"api/v1/pos-order-bridge/order/reject/{orderCode}", null);
-            //    return response.IsSuccessStatusCode;
-            //}
-            //catch
-            //{
-            //    return false;
-            //}
         }
+        //public async Task<bool> RejectOrderAsync(string orderCode)
+        //{
+        //    try
+        //    {
+        //        using var request = new HttpRequestMessage(
+        //            HttpMethod.Post,
+        //            $"api/v1/pos-order-bridge/order/reject/{orderCode}");
+
+        //        // Leemos el token de la sesión activa
+        //        var token = await _vaultService.GetAuthTokenAsync();
+        //        if (!string.IsNullOrEmpty(token))
+        //        {
+        //            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        //            Console.WriteLine("🔑 [AUTH] Token Bearer adjuntado a la petición.");
+        //        }
+        //        else
+        //        {
+        //            Console.WriteLine("⚠️ [AUTH WARN] GetAuthTokenAsync() devolvió nulo o vacío.");
+        //        }
+
+        //        var response = await _http.SendAsync(request);
+
+        //        if (!response.IsSuccessStatusCode)
+        //        {
+        //            var errorContent = await response.Content.ReadAsStringAsync();
+        //            _logger.LogDebug($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+        //            Console.WriteLine($"❌ [REJECTED FAIL] Status: {response.StatusCode} | Body: {errorContent}");
+        //            return false;
+        //        }
+
+        //        _logger.LogDebug($"✅ [REJECTED OK] Orden #{orderCode} marcada como REJECTED.");
+        //        // Console.WriteLine($"✅ [PREPARED OK] Orden #{code} marcada como REJECTED.");
+        //        return true;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"❌ [REJECTED EXCEPTION]: {ex.Message}");
+        //        // Console.WriteLine($"❌ [PREPARED EXCEPTION]: {ex.Message}"); 
+        //        return false;
+        //    }
+
+        //    //try
+        //    //{
+        //    //    var response = await _http.PostAsync($"api/v1/pos-order-bridge/order/reject/{orderCode}", null);
+        //    //    return response.IsSuccessStatusCode;
+        //    //}
+        //    //catch
+        //    //{
+        //    //    return false;
+        //    //}
+        //}
         public async Task<bool> MarkAsPreparedAsyncX(string orderCode)
         {
             try

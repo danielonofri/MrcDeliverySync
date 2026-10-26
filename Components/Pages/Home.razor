@@ -444,13 +444,13 @@
 
     private async Task HandleOrderSelection(OrderSummaryDto order)
     {
-        var parameters = new DialogParameters<OrderDetailDialog>
+        var parameters = new DialogParameters<OrderDetailDialogOld>
         {
             { x => x.OrderSummary, order }
         };
 
         var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        var dialog = await DialogService.ShowAsync<OrderDetailDialog>("Detalle del Pedido", parameters, options);
+        var dialog = await DialogService.ShowAsync<OrderDetailDialogOld>("Detalle del Pedido", parameters, options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
