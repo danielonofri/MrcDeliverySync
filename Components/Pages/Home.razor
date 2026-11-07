@@ -44,7 +44,7 @@
 
                 @* --- WIDGET DE ESTADO DE APERTURA DE TIENDA MOVIDO A LA DERECHA --- *@
                 <div>
-                    <StoreStatusWidget />
+                    <StoreStatusWidget @ref="_storeWidget" />
                 </div>
             </div>
 
@@ -264,6 +264,7 @@
     $"Último informe: {DateTime.Now:HH:mm:ss} || GMT: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
     private string TooltipConfiguraciones =>
     $"PWA Host: {AppState.PwaHost} || API Host: {AppState.ApiHost} || Sql: {AppState.SqlServer}";
+    private StoreStatusWidget? _storeWidget;
 
     protected override async Task OnInitializedAsync()
     {
@@ -293,6 +294,10 @@
         {
             await InvokeAsync(async () =>
             {
+                // Sin await a propósito: el widget captura sus propios errores
+                // y así una API de tienda lenta no retrasa el refresco del tablero.
+                _ = _storeWidget?.RefreshAsync();
+
                 await LoadOrdersAsync();
                 await EvaluateSyncHealthAsync();
                 StateHasChanged();

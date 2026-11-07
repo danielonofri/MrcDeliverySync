@@ -5,7 +5,6 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IConfiguration Configuration
-@implements IDisposable
 
 <MudCard Elevation="2" Class="pa-2 cursor-pointer" @onclick="OpenStatusDialog">
     <MudCardContent Class="py-1 px-2">
@@ -38,7 +37,7 @@
     </MudCardContent>
 </MudCard>
 
-@code {
+@* @code {
     private int _refreshDelaySeconds = 3; // Valor por defecto
     private StoreStatusDto? _storeStatus;
     private PeriodicTimer? _timer;
@@ -164,4 +163,130 @@
         _cts?.Dispose();
         _timer?.Dispose();
     }
+} *@
+
+@code {
+    
+    private int _refreshDelaySeconds = 3; // espera tras cambiar estado desde el diálogo
+    private StoreStatusDto? _storeStatus;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _refreshDelaySeconds = Configuration.GetValue<int>("SyncSettings:StoreStatusRefreshDelaySeconds", 3);
+            await FetchStoreStatusAsync();
+        }
+    }
+
+// Lo llama Home en cada vuelta del sync
+    public Task RefreshAsync() => FetchStoreStatusAsync();
+
+    private async Task FetchStoreStatusAsync()
+    {
+        try
+        {
+            var data = await StoreRepository.GetStoreStatusAsync();
+            if (data != null && data.Count > 0)
+            {
+                var previous = _storeStatus?.AvailabilityState;
+                _storeStatus = data[0];
+                var current = _storeStatus.AvailabilityState;
+
+                // Sin toast en la primera carga (previous == null)
+                if (previous != null &&
+                    !string.Equals(previous, current, StringComparison.OrdinalIgnoreCase))
+                {
+                    NotifyStatusChange(previous, current);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al obtener estado de tienda: {ex.Message}");
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void NotifyStatusChange(string? previous, string? current)
+    {
+        var severity = current?.ToUpper() switch
+        {
+            "OPEN" => Severity.Success,
+            "CLOSED_UNTIL" or "CLOSED" or "CLOSED_TODAY" => Severity.Error,
+            _ => Severity.Warning
+        };
+
+        var message = $"La tienda cambió de {GetTranslatedState(previous)} a {GetTranslatedState(current)}";
+        InvokeAsync(() => Snackbar.Add(message, severity));
+    }
+    
+    private async Task OpenStatusDialog()
+    {
+        var parameters = new DialogParameters<StoreStatusDialog>
+        {
+            { x => x.CurrentStatus, _storeStatus }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<StoreStatusDialog>("Cambiar Estado de la Tienda", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(_refreshDelaySeconds));
+            await FetchStoreStatusAsync();
+        }
+    }
+
+    private Color GetStatusColor(string? state) => state?.ToUpper() switch
+    {
+        "OPEN" => Color.Success,
+        "CLOSED_UNTIL" or "CLOSED" or "CLOSED_TODAY" => Color.Error,
+        "INACTIVE" or "UNKNOWN" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string GetStatusIcon(string? state) => state?.ToUpper() switch
+    {
+        "OPEN" => Icons.Material.Filled.Store,
+        _ => Icons.Material.Filled.Storefront
+    };
+
+    private string GetTranslatedState(string? state) => state?.ToUpper() switch
+    {
+        "OPEN" => "Abierto",
+        "CLOSED_UNTIL" => "Cerrado temporalmente",
+        "CLOSED" => "Cerrado",
+        "CLOSED_TODAY" => "Cerrado por el resto del día",
+        "INACTIVE" => "Inactivo",
+        "UNKNOWN" => "Desconocido",
+        _ => "Desconocido"
+    };
+
+    private string FormatSlotEnd(string dateStr)
+    {
+        if (DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+        {
+            // Lee la configuración (por defecto true si no existe para mantener UTC como venías viendo)
+            bool displayAsUtc = Configuration.GetValue<bool>("SyncSettings:DisplayStoreTimeAsUtc", true);
+
+            if (displayAsUtc)
+            {
+                // Muestra la hora UTC literal (ej: 03:00)
+                return dt.ToString("HH:mm");
+            }
+            else
+            {
+                // Convierte a la hora local de la máquina (ej: 00:00)
+                return dt.ToLocalTime().ToString("HH:mm");
+            }
+        }
+        return dateStr;
+    }
+    
+    
 }
