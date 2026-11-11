@@ -16,14 +16,14 @@
                 </MudAvatar>
                 <div>
                     <MudText Typo="Typo.body2" Class="fw-bold">
-                        Estado de Tienda: @GetTranslatedState(_storeStatus?.AvailabilityState)
+                        Estado de Tienda: @GetTranslatedState (_storeStatus?.AvailabilityState)
                     </MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary">
                         Original: <code>@(_storeStatus?.AvailabilityState ?? "CARGANDO...")</code>
 
                         @if (_storeStatus?.AvailabilityState?.ToUpper() == "OPEN" && !string.IsNullOrEmpty(_storeStatus?.CurrentSlotEndAt))
                         {
-                            <span>(Hasta: @_slotEndText</span>
+                            <span>(Hasta: @_slotEndText)</span>
                         }
                         else if (_storeStatus?.AvailabilityState?.ToUpper() == "CLOSED_UNTIL" && !string.IsNullOrEmpty(_storeStatus?.ClosedUntil))
                         {
@@ -167,7 +167,7 @@
 } *@
 
 @code {
-    
+
     private int _refreshDelaySeconds = 3; // espera tras cambiar estado desde el diálogo
     private StoreStatusDto? _storeStatus;
 
@@ -180,7 +180,7 @@
         }
     }
 
-// Lo llama Home en cada vuelta del sync
+    // Lo llama Home en cada vuelta del sync
     public Task RefreshAsync() => FetchStoreStatusAsync();
 
     private async Task FetchStoreStatusAsync()
@@ -192,8 +192,12 @@
             {
                 var previous = _storeStatus?.AvailabilityState;
                 _storeStatus = data[0];
-                _slotEndText = await ToClientLocalAsync(_storeStatus.CurrentSlotEndAt);
-                _closedUntilText = await ToClientLocalAsync(_storeStatus.ClosedUntil);
+                //_slotEndText = await ToClientLocalAsync(_storeStatus.CurrentSlotEndAt);
+                string diaMesHoraMinuto = (_storeStatus.CurrentSlotEndAt ?? "                ").Substring(5,11);
+                _slotEndText = diaMesHoraMinuto.Replace("T", " ").Replace("-", "/");
+
+                diaMesHoraMinuto = (_storeStatus.ClosedUntil ?? "                ").Substring(5, 11);
+                _closedUntilText = diaMesHoraMinuto.Replace("T", " ").Replace("-", "/");
                 var current = _storeStatus.AvailabilityState;
 
                 // Sin toast en la primera carga (previous == null)
@@ -226,7 +230,7 @@
         var message = $"La tienda cambió de {GetTranslatedState(previous)} a {GetTranslatedState(current)}";
         InvokeAsync(() => Snackbar.Add(message, severity));
     }
-    
+
     private async Task OpenStatusDialog()
     {
         var parameters = new DialogParameters<StoreStatusDialog>
@@ -300,6 +304,6 @@
     //     }
     //     return dateStr;
     // }
-    
+
     
 }

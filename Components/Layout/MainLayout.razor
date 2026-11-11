@@ -212,7 +212,7 @@
         // Si era Admin (Rol 1), elimina la OwnerApiKey al cerrar sesión
         if (_userRole == 1)
         {
-            await VaultService.SaveOwnerApiKeyAsync(string.Empty);
+            //await VaultService.SaveOwnerApiKeyAsync(string.Empty);
         }
 
         _userName = string.Empty;
