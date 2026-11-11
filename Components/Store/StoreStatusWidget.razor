@@ -5,6 +5,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IConfiguration Configuration
+@inject IJSRuntime JS
 
 <MudCard Elevation="2" Class="pa-2 cursor-pointer" @onclick="OpenStatusDialog">
     <MudCardContent Class="py-1 px-2">
@@ -22,11 +23,11 @@
 
                         @if (_storeStatus?.AvailabilityState?.ToUpper() == "OPEN" && !string.IsNullOrEmpty(_storeStatus?.CurrentSlotEndAt))
                         {
-                            <span>(Hasta: @FormatSlotEnd(_storeStatus.CurrentSlotEndAt))</span>
+                            <span>(Hasta: @_slotEndText</span>
                         }
                         else if (_storeStatus?.AvailabilityState?.ToUpper() == "CLOSED_UNTIL" && !string.IsNullOrEmpty(_storeStatus?.ClosedUntil))
                         {
-                            <span>(Hasta: @FormatSlotEnd(_storeStatus.ClosedUntil))</span>
+                            <span>(Hasta: @_closedUntilText)</span>
                         }
                         @* Si es CLOSED_TODAY u otro estado, no imprime nada de "Hasta" *@
                     </MudText>
@@ -191,6 +192,8 @@
             {
                 var previous = _storeStatus?.AvailabilityState;
                 _storeStatus = data[0];
+                _slotEndText = await ToClientLocalAsync(_storeStatus.CurrentSlotEndAt);
+                _closedUntilText = await ToClientLocalAsync(_storeStatus.ClosedUntil);
                 var current = _storeStatus.AvailabilityState;
 
                 // Sin toast en la primera carga (previous == null)
@@ -267,26 +270,36 @@
         _ => "Desconocido"
     };
 
-    private string FormatSlotEnd(string dateStr)
-    {
-        if (DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
-        {
-            // Lee la configuración (por defecto true si no existe para mantener UTC como venías viendo)
-            bool displayAsUtc = Configuration.GetValue<bool>("SyncSettings:DisplayStoreTimeAsUtc", true);
+    private string _slotEndText = "";
+    private string _closedUntilText = "";
 
-            if (displayAsUtc)
-            {
-                // Muestra la hora UTC literal (ej: 03:00)
-                return dt.ToString("HH:mm");
-            }
-            else
-            {
-                // Convierte a la hora local de la máquina (ej: 00:00)
-                return dt.ToLocalTime().ToString("HH:mm");
-            }
-        }
-        return dateStr;
+    private async Task<string> ToClientLocalAsync(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        try { return await JS.InvokeAsync<string>("regionalHelpers.formatLocalTime", raw); }
+        catch { return raw; } // si falla el JS, muestra el valor crudo
     }
+
+    // private string FormatSlotEnd(string dateStr)
+    // {
+    //     if (DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+    //     {
+    //         // Lee la configuración (por defecto true si no existe para mantener UTC como venías viendo)
+    //         bool displayAsUtc = Configuration.GetValue<bool>("SyncSettings:DisplayStoreTimeAsUtc", true);
+
+    //         if (displayAsUtc)
+    //         {
+    //             // Muestra la hora UTC literal (ej: 03:00)
+    //             return dt.ToString("HH:mm");
+    //         }
+    //         else
+    //         {
+    //             // Convierte a la hora local de la máquina (ej: 00:00)
+    //             return dt.ToLocalTime().ToString("HH:mm");
+    //         }
+    //     }
+    //     return dateStr;
+    // }
     
     
 }
